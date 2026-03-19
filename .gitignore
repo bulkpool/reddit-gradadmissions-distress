@@ -1,17 +1,26 @@
 # ── Raw data (too large for GitHub, >100MB) ──────────────────────────────────
-r_gradadmissions_posts.jsonl
-r_gradadmissions_comments.jsonl
-r_gradadmissions_posts.cleaned.jsonl
-r_gradadmissions_comments.cleaned.jsonl
+data/raw/
+*.jsonl
 CS598_SC3_Paper.pdf
 
 # ── Large derived parquets (reproducible by running notebooks 01–05) ─────────
-pipeline/scored_corpus.parquet
-pipeline/scored_corpus_v2.parquet
+data/processed/scored_corpus.parquet
+data/processed/scored_corpus_v2.parquet
 
 # ── Jupyter checkpoints ───────────────────────────────────────────────────────
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.env
+.venv
+venv/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
 
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

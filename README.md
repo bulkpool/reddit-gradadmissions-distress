@@ -49,13 +49,13 @@ r_gradadmissions_comments.cleaned.jsonl   # 380,722 comments
 Run the following notebooks **in order** from the `pipeline/` directory. Each notebook reads the outputs of the previous ones.
 
 ```
-pipeline/
-├── 01_score_corpus.ipynb          ← Run first
-├── 02_anchor_events.ipynb         ← Run second
-├── 03_did_analysis.ipynb          ← Optional (VADER baseline)
-├── 04_collect_community_breadth.ipynb  ← Run third (~3 hours, resumable)
-├── 05_train_classifiers.ipynb     ← Run fourth (~15 min API + ~5 min training)
-└── 06_did_analysis_v2.ipynb       ← Run last (main results)
+notebooks/
+├── 01_score_corpus.ipynb              ← Run first
+├── 02_anchor_events.ipynb             ← Run second
+├── 03_did_analysis.ipynb              ← Optional (VADER baseline)
+├── 04_collect_community_breadth.ipynb ← Run third (~3 hours, resumable)
+├── 05_train_classifiers.ipynb         ← Run fourth (~15 min API + ~5 min training)
+└── 06_did_analysis_v2.ipynb           ← Run last (main results)
 ```
 
 ---
@@ -66,11 +66,11 @@ pipeline/
 **What it does**: Loads both raw JSONL files, filters bots/deleted accounts, applies VADER sentiment scoring to all 467,525 posts and comments.
 
 **Reads**:
-- `r_gradadmissions_posts.cleaned.jsonl` *(root)*
-- `r_gradadmissions_comments.cleaned.jsonl` *(root)*
+- `data/raw/r_gradadmissions_posts.cleaned.jsonl`
+- `data/raw/r_gradadmissions_comments.cleaned.jsonl`
 
 **Writes**:
-- `pipeline/scored_corpus.parquet` ⚠️ *not in repo — must generate*
+- `data/processed/scored_corpus.parquet` ⚠️ *not in repo — must generate*
 
 **Runtime**: ~2 minutes
 
@@ -80,13 +80,13 @@ pipeline/
 **What it does**: Identifies anchor posts (high-distress negative disclosure posts), computes per-user weekly distress scores, and classifies all users as exposed or unexposed.
 
 **Reads**:
-- `pipeline/scored_corpus.parquet`
+- `data/processed/scored_corpus.parquet`
 
 **Writes**:
-- `pipeline/anchor_posts.parquet`
-- `pipeline/user_weekly_scores.parquet`
-- `pipeline/exposure_labels.parquet`
-- `pipeline/user_community_breadth.parquet` *(placeholder — overwritten by step 4)*
+- `data/processed/anchor_posts.parquet`
+- `data/processed/user_weekly_scores.parquet`
+- `data/processed/exposure_labels.parquet`
+- `data/processed/user_community_breadth.parquet` *(placeholder — overwritten by step 4)*
 
 **Runtime**: ~1 minute
 
@@ -96,13 +96,13 @@ pipeline/
 **What it does**: First-pass DiD using VADER distress scores. Useful as a baseline comparison but superseded by notebook 06. Skip if you only want the final SVM results.
 
 **Reads**:
-- `pipeline/scored_corpus.parquet`
-- `pipeline/user_weekly_scores.parquet`
-- `pipeline/exposure_labels.parquet`
-- `pipeline/anchor_posts.parquet`
-- `pipeline/user_community_breadth.parquet`
+- `data/processed/scored_corpus.parquet`
+- `data/processed/user_weekly_scores.parquet`
+- `data/processed/exposure_labels.parquet`
+- `data/processed/anchor_posts.parquet`
+- `data/processed/user_community_breadth.parquet`
 
-**Writes**: figures only (`fig_event_study.png`, `fig_monthly_distress.png`)
+**Writes**: figures only (`figures/fig_event_study.png`, `figures/fig_monthly_distress.png`)
 
 **Runtime**: ~2 minutes
 
@@ -112,13 +112,13 @@ pipeline/
 **What it does**: Queries the Arctic Shift API for each panel user's cross-subreddit activity. This populates the `community_breadth` column needed for RQ2. **Requires an internet connection.**
 
 **Reads**:
-- `pipeline/user_weekly_scores.parquet`
-- `pipeline/exposure_labels.parquet`
-- `pipeline/breadth_checkpoint.jsonl` *(if resuming a previous run)*
+- `data/processed/user_weekly_scores.parquet`
+- `data/processed/exposure_labels.parquet`
+- `data/processed/breadth_checkpoint.jsonl` *(if resuming a previous run)*
 
 **Writes**:
-- `pipeline/breadth_checkpoint.jsonl` *(incremental checkpoint — safe to interrupt)*
-- `pipeline/user_community_breadth.parquet` *(overwrites placeholder from step 2)*
+- `data/processed/breadth_checkpoint.jsonl` *(incremental checkpoint — safe to interrupt)*
+- `data/processed/user_community_breadth.parquet` *(overwrites placeholder from step 2)*
 
 **Runtime**: ~3 hours (25,316 API requests at ~2.5 req/sec). The run is fully resumable — if interrupted, re-running the notebook picks up from the last checkpoint.
 
@@ -130,16 +130,16 @@ pipeline/
 **What it does**: Pulls training data from Arctic Shift (r/anxiety, r/depression, r/stress as positive; control subreddits as negative), trains three LinearSVC classifiers, and scores the entire gradadmissions corpus. **Requires an internet connection for the data pull (first run only).**
 
 **Reads**:
-- `pipeline/scored_corpus.parquet`
-- `pipeline/training_data_raw.parquet` *(cached after first run — skips API pull)*
+- `data/processed/scored_corpus.parquet`
+- `data/processed/training_data_raw.parquet` *(cached after first run — skips API pull)*
 
 **Writes**:
-- `pipeline/training_data_raw.parquet` *(cached training data — included in repo)*
-- `pipeline/clf_anxiety.joblib` *(included in repo)*
-- `pipeline/clf_depression.joblib` *(included in repo)*
-- `pipeline/clf_stress.joblib` *(included in repo)*
-- `pipeline/scored_corpus_v2.parquet` ⚠️ *not in repo — must generate*
-- `pipeline/user_weekly_scores_v2.parquet` *(included in repo)*
+- `data/processed/training_data_raw.parquet` *(cached training data — included in repo)*
+- `models/clf_anxiety.joblib` *(included in repo)*
+- `models/clf_depression.joblib` *(included in repo)*
+- `models/clf_stress.joblib` *(included in repo)*
+- `data/processed/scored_corpus_v2.parquet` ⚠️ *not in repo — must generate*
+- `data/processed/user_weekly_scores_v2.parquet` *(included in repo)*
 
 **Runtime**: ~15 min (API pull, first run only) + ~5 min (scoring 467k records)
 
@@ -151,12 +151,12 @@ pipeline/
 **What it does**: Full DiD analysis using SVM mh_score as the outcome. Answers RQ1 and RQ2. Produces the main result figures.
 
 **Reads**:
-- `pipeline/user_weekly_scores_v2.parquet`
-- `pipeline/exposure_labels.parquet`
-- `pipeline/user_community_breadth.parquet`
+- `data/processed/user_weekly_scores_v2.parquet`
+- `data/processed/exposure_labels.parquet`
+- `data/processed/user_community_breadth.parquet`
 
 **Writes**:
-- `pipeline/fig_event_study_v2.png`
+- `figures/fig_event_study_v2.png`
 
 **Runtime**: ~3–5 minutes
 
@@ -166,20 +166,20 @@ pipeline/
 
 | File | In Repo? | How to Get It |
 |------|----------|---------------|
-| `r_gradadmissions_posts.cleaned.jsonl` | No — 125 MB | Obtain from data source |
-| `r_gradadmissions_comments.cleaned.jsonl` | No — 275 MB | Obtain from data source |
-| `pipeline/scored_corpus.parquet` | No — 92 MB | Run notebook 01 |
-| `pipeline/scored_corpus_v2.parquet` | No — 108 MB | Run notebook 05 |
-| `pipeline/anchor_posts.parquet` | Yes | — |
-| `pipeline/user_weekly_scores.parquet` | Yes | — |
-| `pipeline/user_weekly_scores_v2.parquet` | Yes | — |
-| `pipeline/exposure_labels.parquet` | Yes | — |
-| `pipeline/user_community_breadth.parquet` | Yes | — |
-| `pipeline/training_data_raw.parquet` | Yes | — |
-| `pipeline/clf_anxiety/depression/stress.joblib` | Yes | — |
-| `pipeline/breadth_checkpoint.jsonl` | Yes | — |
-| All notebooks (`01`–`06`) | Yes | — |
-| All figures (`fig_*.png`) | Yes | — |
+| `data/raw/r_gradadmissions_posts.cleaned.jsonl` | No — 125 MB | Obtain from data source |
+| `data/raw/r_gradadmissions_comments.cleaned.jsonl` | No — 275 MB | Obtain from data source |
+| `data/processed/scored_corpus.parquet` | No — 92 MB | Run notebook 01 |
+| `data/processed/scored_corpus_v2.parquet` | No — 108 MB | Run notebook 05 |
+| `data/processed/anchor_posts.parquet` | Yes | — |
+| `data/processed/user_weekly_scores.parquet` | Yes | — |
+| `data/processed/user_weekly_scores_v2.parquet` | Yes | — |
+| `data/processed/exposure_labels.parquet` | Yes | — |
+| `data/processed/user_community_breadth.parquet` | Yes | — |
+| `data/processed/training_data_raw.parquet` | Yes | — |
+| `data/processed/breadth_checkpoint.jsonl` | Yes | — |
+| `models/clf_anxiety/depression/stress.joblib` | Yes | — |
+| `notebooks/01` – `06` | Yes | — |
+| `figures/fig_*.png` | Yes | — |
 
 ---
 
@@ -193,6 +193,27 @@ Graduate admissions is a high-stakes, anxiety-laden process. Reddit communities 
 **Distress measure**: SVM classifiers trained on r/anxiety, r/depression, r/stress (following Low et al., 2020).
 **Study window**: August 2023 – July 2025 (two full admissions cycles).
 **Dataset**: 469,163 posts and comments from r/GradAdmissions.
+
+### Repository Structure
+
+```
+├── notebooks/              # Analysis notebooks (run in order 01→06)
+│   ├── 00_exploratory_topic_sentiment.ipynb
+│   ├── 01_score_corpus.ipynb
+│   ├── 02_anchor_events.ipynb
+│   ├── 03_did_analysis.ipynb          # VADER baseline (optional)
+│   ├── 04_collect_community_breadth.ipynb
+│   ├── 05_train_classifiers.ipynb
+│   └── 06_did_analysis_v2.ipynb       # Main results
+│
+├── data/
+│   ├── raw/                # Raw JSONL files (gitignored — too large)
+│   └── processed/          # Intermediate parquets (most included in repo)
+│
+├── models/                 # Trained SVM classifiers (.joblib)
+├── figures/                # All output plots (.png)
+└── README.md
+```
 
 ---
 
