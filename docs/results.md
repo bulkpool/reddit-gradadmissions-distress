@@ -81,13 +81,33 @@ Several possible explanations:
 
 ---
 
-## Event Study Plot
+## Key Figures
 
-The event study checks the parallel trends assumption — that exposed and unexposed users were on similar trajectories *before* the event, and diverged only *after*.
+### 1 — DiD Estimates: Measure Comparison + Cross-cycle Replication
 
-![Event Study](../figures/fig_event_study_v2.png)
+![DiD estimates](../figures/fig_did_estimates.png)
 
-**Reading the plot**: Lines should track closely at offsets −2 and −1 (pre-period), and diverge at +1 and +2 (post-period). This pattern holds, supporting the causal interpretation.
+**Left**: The SVM-based `mh_score` produces a significant DiD estimate of +0.013 (p < 0.001), while VADER alone falls short (p = 0.077). The SVM captures the *style* of distressed writing rather than just keyword presence.
+
+**Right**: The effect replicates independently in both the 2023–24 and 2024–25 admissions cycles, ruling out a single-season artifact.
+
+---
+
+### 2 — Classifier Validity + Seasonal Signal
+
+![Significance](../figures/fig_significance.png)
+
+**Left**: mh_score correctly orders posts by self-reported outcome — Rejected posts score highest (μ = 0.451), followed by Waitlisted (0.446), then Accepted (0.401). The classifier is capturing real distress, not noise.
+
+**Right**: Mean mh_score across the study period peaks during December–February (orange shading) — exactly when admissions decisions arrive. This seasonal alignment validates that the measure reflects the emotional reality of the admissions cycle.
+
+---
+
+### 3 — Event Study: Parallel Trends + Post-event Divergence
+
+![Event study clean](../figures/fig_event_study_clean.png)
+
+The key causal validity check. Exposed and unexposed users track nearly identically in weeks −2 and −1 (parallel pre-trends), then diverge after the anchor event. The +0.013 gap at week +1 is statistically significant (p < 0.001). 95% confidence intervals shaded.
 
 ---
 
@@ -95,13 +115,16 @@ The event study checks the parallel trends assumption — that exposed and unexp
 
 | Figure | Description |
 |--------|-------------|
-| `fig_weekly_sentiment.png` | Weekly VADER sentiment + post volume — shows seasonal peaks (Dec–Feb) |
+| `fig_did_estimates.png` | DiD coefficient plot: VADER vs SVM + cross-cycle replication |
+| `fig_significance.png` | mh_score by outcome (validity) + seasonal distress pattern |
+| `fig_event_study_clean.png` | Clean event study with 95% CI and annotated DiD gap |
+| `fig_event_study_v2.png` | Event study using SVM mh_score (original version) |
+| `fig_event_study.png` | Event study using VADER distress (baseline comparison) |
+| `fig_weekly_sentiment.png` | Weekly VADER sentiment + post volume over study window |
 | `fig_anchor_posts_per_week.png` | Anchor posts per week — spikes align with rejection waves |
 | `fig_anchor_eda.png` | Anchor post breakdown by outcome label and VADER distribution |
 | `fig_community_breadth_dist.png` | Distribution of community breadth (raw + log-transformed) |
 | `fig_breadth_by_exposure.png` | Community breadth: exposed vs unexposed comparison |
-| `fig_event_study.png` | Event study using VADER distress (baseline comparison) |
-| `fig_event_study_v2.png` | Event study using SVM mh_score — **main result figure** |
 | `fig_classifier_scores.png` | Score distributions across the corpus for all three classifiers |
 | `fig_score_correlation.png` | mh_score vs VADER correlation (r ≈ −0.35 with compound) |
 | `fig_monthly_distress.png` | Monthly mean distress + post volume (seasonality check) |
