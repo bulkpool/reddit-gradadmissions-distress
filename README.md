@@ -1,5 +1,5 @@
-# You're Freaking Out and It Scares Me Too — Understanding How Exposure to Negative Discourse on r/GradAdmissions Affects Anxiety
----
+# You're Freaking Out and It Scares Me Too:
+## Understanding How Exposure to Negative Discourse on r/GradAdmissions Affects Anxiety
 
 Graduate admissions is stressful. But does *reading* other people's rejection posts make it worse? This project uses causal inference to find out — measuring whether exposure to high-distress posts on r/GradAdmissions increases anxiety in other users, and whether having a wider online social presence buffers that effect.
 
