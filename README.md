@@ -66,10 +66,10 @@ The distress measure is a composite SVM score (`mh_score`) trained on r/anxiety,
 ├── notebooks/                  # Run these in order (01 → 06)
 │   ├── 01_score_corpus.ipynb
 │   ├── 02_anchor_events.ipynb
-│   ├── 03_did_analysis.ipynb   # VADER baseline (optional)
+│   ├── 03_train_classifiers.ipynb
 │   ├── 04_collect_community_breadth.ipynb
-│   ├── 05_train_classifiers.ipynb
-│   └── 06_did_analysis_v2.ipynb  ← main results
+│   ├── 05_did_analysis_v2.ipynb  ← main results
+│   └── 06_did_analysis_vader_baseline.ipynb  # VADER baseline (optional)
 │
 ├── data/
 │   ├── raw/                    # Raw JSONL files (not in repo — too large)

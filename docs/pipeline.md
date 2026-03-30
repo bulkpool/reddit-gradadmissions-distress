@@ -70,43 +70,9 @@ Identifies **anchor posts** — the "treatment events" in the causal design. An 
 
 ---
 
-## Notebook 03 — VADER DiD Baseline (optional)
+## Notebook 03 — SVM Classifier Training
 
-**File**: `notebooks/03_did_analysis.ipynb`
-
-Runs the full DiD pipeline using `mean_distress` (VADER neg) as the outcome. Produces baseline results for comparison with the SVM approach.
-
-**Result**: DiD = +0.014, p < 0.0001 on VADER neg. The effect is detectable but VADER conflates topic language with genuine distress — words like "rejected" and "stressed" appear in advisory posts too. The SVM approach (notebook 06) is more sensitive.
-
----
-
-## Notebook 04 — Community Breadth Collection
-
-**File**: `notebooks/04_collect_community_breadth.ipynb`
-
-Queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each panel user's activity across all of Reddit during the study window.
-
-**Community breadth** = number of distinct subreddits a user posted or commented in (excluding r/GradAdmissions and their own profile sub).
-
-**API endpoint**: `GET /api/users/interactions/subreddits?author={user}&after=2023-08-01&before=2025-07-31`
-
-**Scale**: 25,316 users queried, ~3 hours at 2.5 req/sec with dynamic rate limiting.
-
-**Fault tolerance**: Progress is saved to `data/processed/breadth_checkpoint.jsonl` every 500 users. Interrupting and re-running the notebook resumes from the last checkpoint.
-
-**Stats** (25,305 users):
-- Mean: 23.1 subreddits, Median: 10
-- 7.5% of users post exclusively in r/GradAdmissions (breadth = 0)
-
-**Output**: `data/processed/user_community_breadth.parquet`
-
-> This step is already complete — the output is included in the repository.
-
----
-
-## Notebook 05 — SVM Classifier Training
-
-**File**: `notebooks/05_train_classifiers.ipynb`
+**File**: `notebooks/03_train_classifiers.ipynb`
 
 Trains three binary SVM classifiers following the methodology of Low et al. (2020), then applies them to the full corpus to produce a more sensitive distress measure.
 
@@ -142,9 +108,33 @@ Trains three binary SVM classifiers following the methodology of Low et al. (202
 
 ---
 
-## Notebook 06 — Main DiD Analysis (SVM)
+## Notebook 04 — Community Breadth Collection
 
-**File**: `notebooks/06_did_analysis_v2.ipynb`
+**File**: `notebooks/04_collect_community_breadth.ipynb`
+
+Queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each panel user's activity across all of Reddit during the study window.
+
+**Community breadth** = number of distinct subreddits a user posted or commented in (excluding r/GradAdmissions and their own profile sub).
+
+**API endpoint**: `GET /api/users/interactions/subreddits?author={user}&after=2023-08-01&before=2025-07-31`
+
+**Scale**: 25,316 users queried, ~3 hours at 2.5 req/sec with dynamic rate limiting.
+
+**Fault tolerance**: Progress is saved to `data/processed/breadth_checkpoint.jsonl` every 500 users. Interrupting and re-running the notebook resumes from the last checkpoint.
+
+**Stats** (25,305 users):
+- Mean: 23.1 subreddits, Median: 10
+- 7.5% of users post exclusively in r/GradAdmissions (breadth = 0)
+
+**Output**: `data/processed/user_community_breadth.parquet`
+
+> This step is already complete — the output is included in the repository.
+
+---
+
+## Notebook 05 — Main DiD Analysis (SVM)
+
+**File**: `notebooks/05_did_analysis_v2.ipynb`
 
 The main results notebook. Runs the full causal pipeline using `mean_mh_score` as the outcome.
 
@@ -158,3 +148,13 @@ The main results notebook. Runs the full causal pipeline using `mean_mh_score` a
 6. **Event study plot**: visualize parallel pre-trends and post-event divergence
 
 See [Results](results.md) for the output.
+
+---
+
+## Notebook 06 — VADER DiD Baseline (optional)
+
+**File**: `notebooks/06_did_analysis_vader_baseline.ipynb`
+
+Runs the full DiD pipeline using `mean_distress` (VADER neg) as the outcome. Useful for comparison with the SVM results in notebook 05 but not required for the main findings.
+
+**Result**: DiD = +0.014, p < 0.0001 on VADER neg. The effect is detectable but VADER conflates topic language with genuine distress — words like "rejected" and "stressed" appear in advisory posts too. The SVM approach is more sensitive.

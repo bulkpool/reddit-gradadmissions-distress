@@ -13,8 +13,8 @@ flowchart TD
     N01["01_score_corpus.ipynb\nVADER sentiment scoring\n→ scored_corpus.parquet"]
     N02["02_anchor_events.ipynb\nIdentify distress events\n→ anchor_posts.parquet\n→ exposure_labels.parquet\n→ user_weekly_scores.parquet"]
     N04["04_collect_community_breadth.ipynb\nQuery Arctic Shift per user\n→ user_community_breadth.parquet"]
-    N05["05_train_classifiers.ipynb\nTrain 3 LinearSVC models\n→ scored_corpus_v2.parquet\n→ user_weekly_scores_v2.parquet"]
-    N06["06_did_analysis_v2.ipynb\nPropensity matching + DiD\n→ RQ1 & RQ2 results"]
+    N05["03_train_classifiers.ipynb\nTrain 3 LinearSVC models\n→ scored_corpus_v2.parquet\n→ user_weekly_scores_v2.parquet"]
+    N06["05_did_analysis_v2.ipynb\nPropensity matching + DiD\n→ RQ1 & RQ2 results"]
 
     ARCTIC["🌐 Arctic Shift API\narctic-shift.photon-reddit.com\nTraining data: r/anxiety,\nr/depression, r/stress,\n+ 4 control subreddits"]
     ARCTIC2["🌐 Arctic Shift API\n/api/users/interactions/subreddits\nDistinct subreddits per user"]

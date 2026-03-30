@@ -33,13 +33,13 @@ You don't need to re-run everything from scratch. Several expensive steps are pr
 | Already included | Skips |
 |-----------------|-------|
 | `data/processed/user_community_breadth.parquet` | ~3 hours of Arctic Shift API calls (notebook 04) |
-| `data/processed/training_data_raw.parquet` | ~15 min of API calls for training data (notebook 05) |
-| `models/clf_*.joblib` | SVM classifier training (notebook 05) |
-| `data/processed/user_weekly_scores_v2.parquet` | Weekly score aggregation (notebook 05) |
+| `data/processed/training_data_raw.parquet` | ~15 min of API calls for training data (notebook 03) |
+| `models/clf_*.joblib` | SVM classifier training (notebook 03) |
+| `data/processed/user_weekly_scores_v2.parquet` | Weekly score aggregation (notebook 03) |
 
 The two files you **must** generate are:
 - `data/processed/scored_corpus.parquet` — run notebook 01 (~2 min)
-- `data/processed/scored_corpus_v2.parquet` — run notebook 05 (scoring only, ~5 min)
+- `data/processed/scored_corpus_v2.parquet` — run notebook 03 (scoring only, ~5 min)
 
 ---
 
@@ -50,10 +50,10 @@ Run notebooks in this order. Each one reads outputs from the previous.
 ```
 01_score_corpus.ipynb              (~2 min)
 02_anchor_events.ipynb             (~1 min)
-03_did_analysis.ipynb              (~2 min, optional — VADER baseline only)
+03_train_classifiers.ipynb         (~5 min if skipping API pull)
 04_collect_community_breadth.ipynb (SKIP — already done, see above)
-05_train_classifiers.ipynb         (~5 min if skipping API pull)
-06_did_analysis_v2.ipynb           (~5 min) ← main results
+05_did_analysis_v2.ipynb           (~5 min) ← main results
+06_did_analysis_vader_baseline.ipynb (~2 min, optional — VADER comparison)
 ```
 
 See [Pipeline](pipeline.md) for what each notebook does in detail.
@@ -86,27 +86,7 @@ Identifies the 7,075 high-distress "anchor posts" and classifies all users as ex
 
 ---
 
-### Step 3 — VADER DiD Baseline (`03_did_analysis.ipynb`) — *optional*
-
-First-pass DiD using VADER scores. Useful as a comparison to the SVM results but not required.
-
-**Reads**: `data/processed/scored_corpus.parquet`, `data/processed/user_weekly_scores.parquet`, `data/processed/exposure_labels.parquet`, `data/processed/anchor_posts.parquet`, `data/processed/user_community_breadth.parquet`
-
-**Writes**: figures only
-
-**Runtime**: ~2 minutes
-
----
-
-### Step 4 — Community Breadth (`04_collect_community_breadth.ipynb`) — *already done*
-
-> **Skip this step** — `data/processed/user_community_breadth.parquet` is already in the repo.
-
-This notebook queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each user's cross-subreddit activity. It took ~3 hours to run (25,316 API requests). The checkpoint file (`data/processed/breadth_checkpoint.jsonl`) is also included — if you do want to re-run, it will resume from where it left off.
-
----
-
-### Step 5 — Train Classifiers & Score Corpus (`05_train_classifiers.ipynb`)
+### Step 3 — Train Classifiers & Score Corpus (`03_train_classifiers.ipynb`)
 
 Trains three SVM mental-health classifiers (anxiety, depression, stress) and scores the full corpus.
 
@@ -120,7 +100,15 @@ Trains three SVM mental-health classifiers (anxiety, depression, stress) and sco
 
 ---
 
-### Step 6 — Main DiD Analysis (`06_did_analysis_v2.ipynb`)
+### Step 4 — Community Breadth (`04_collect_community_breadth.ipynb`) — *already done*
+
+> **Skip this step** — `data/processed/user_community_breadth.parquet` is already in the repo.
+
+This notebook queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each user's cross-subreddit activity. It took ~3 hours to run (25,316 API requests). The checkpoint file (`data/processed/breadth_checkpoint.jsonl`) is also included — if you do want to re-run, it will resume from where it left off.
+
+---
+
+### Step 5 — Main DiD Analysis (`05_did_analysis_v2.ipynb`)
 
 Runs the full causal analysis: propensity score matching, DiD regression, RQ1, RQ2, cross-cycle replication, and event study plot.
 
@@ -129,6 +117,18 @@ Runs the full causal analysis: propensity score matching, DiD regression, RQ1, R
 **Writes**: `figures/fig_event_study_v2.png`
 
 **Runtime**: ~5 minutes
+
+---
+
+### Step 6 — VADER DiD Baseline (`06_did_analysis_vader_baseline.ipynb`) — *optional*
+
+First-pass DiD using VADER scores. Useful as a comparison to the SVM results but not required.
+
+**Reads**: `data/processed/scored_corpus.parquet`, `data/processed/user_weekly_scores.parquet`, `data/processed/exposure_labels.parquet`, `data/processed/anchor_posts.parquet`, `data/processed/user_community_breadth.parquet`
+
+**Writes**: figures only
+
+**Runtime**: ~2 minutes
 
 ---
 
