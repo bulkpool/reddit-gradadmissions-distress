@@ -1,7 +1,7 @@
 # ── Raw data (too large for GitHub, >100MB) ──────────────────────────────────
 data/raw/
 *.jsonl
-CS598_SC3_Paper.pdf
+*.pdf
 
 # ── Large derived parquets (reproducible by running notebooks 01–05) ─────────
 data/processed/scored_corpus.parquet
