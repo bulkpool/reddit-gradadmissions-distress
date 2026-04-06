@@ -20,22 +20,26 @@ For running instructions, see [Quickstart](quickstart.md).
 ## Execution Order
 
 ```
-01 → 03 → 07 → 02 → 04 → 05
+01 → 02 → 03 → 04 → 05 → 06
 ```
 
-- **01** cleans the raw corpus and must run first
-- **03** trains the SVM classifiers (can run in parallel with 01)
-- **07** identifies anchor posts and exposure labels — depends on 01 + 03
-- **02** scores the panel's pre/post windows — depends on 01 + 03 + 07
-- **04** collects community breadth — depends on 02
-- **05** runs PSM + DiD — depends on 02 + 04
-- **06** (optional) VADER baseline — independent of 02–05
+| Notebook | File | Depends on |
+|----------|------|------------|
+| 01 | `01_clean_corpus.ipynb` | Raw data only |
+| 02 | `02_train_classifiers.ipynb` | Arctic Shift API (training data) |
+| 03 | `03_exposure_labels_v2.ipynb` | 01, 02 |
+| 04 | `04_panel_scores.ipynb` | 01, 02, 03 |
+| 05 | `05_collect_community_breadth.ipynb` | 04 |
+| 06 | `06_did_analysis_v2.ipynb` | 04, 05 |
+| 07 | `07_did_analysis_vader_baseline.ipynb` | Optional — uses old pipeline outputs |
+
+Notebooks 01 and 02 have no dependency on each other and can run in parallel.
 
 ---
 
 ## Notebook 01 — Corpus Cleaning
 
-**File**: `notebooks/01_score_corpus.ipynb`
+**File**: `notebooks/01_clean_corpus.ipynb`
 
 Reads the raw JSONL dumps and produces clean, canonical JSONL files used by all downstream notebooks. No scoring happens here.
 
@@ -60,9 +64,9 @@ The comment→post mapping was missing from the old pipeline. Without it, exposu
 
 ---
 
-## Notebook 03 — SVM Classifier Training
+## Notebook 02 — SVM Classifier Training
 
-**File**: `notebooks/03_train_classifiers.ipynb`
+**File**: `notebooks/02_train_classifiers.ipynb`
 
 Trains three binary SVM classifiers following Low et al. (2020), using posts from mental health subreddits as the positive class and general-topic subreddits as the negative class.
 
@@ -90,16 +94,16 @@ Trains three binary SVM classifiers following Low et al. (2020), using posts fro
 
 ---
 
-## Notebook 07 — Exposure Labels (v2)
+## Notebook 03 — Exposure Labels (v2)
 
-**File**: `notebooks/07_exposure_labels_v2.ipynb`
+**File**: `notebooks/03_exposure_labels_v2.ipynb`
 
 Identifies anchor posts and classifies panel users as exposed or unexposed using correct thread-level linking via `post_id` / `link_id`.
 
-**Anchor post definition** (post must meet both):
+**Anchor post definition** (post must meet all three):
 1. Falls within the anchor period: Sep 1–Nov 30 of a cycle year
 2. Matches negative keyword list (rejection, re-applicant, anxiety, stress, depression...)
-3. `mean_mh_score > 0.45` from the three SVM classifiers
+3. `mean_mh_score > 0.45` from the three SVM classifiers (notebook 02)
 
 **Exposure classification**:
 - **Exposed**: user commented on an anchor post thread (identified via `link_id`); anchor post authors are excluded
@@ -121,9 +125,9 @@ Identifies anchor posts and classifies panel users as exposed or unexposed using
 
 ---
 
-## Notebook 02 — Panel Scoring (Pre / Post Windows)
+## Notebook 04 — Panel Scoring (Pre / Post Windows)
 
-**File**: `notebooks/02_anchor_events.ipynb`
+**File**: `notebooks/04_panel_scores.ipynb`
 
 Scores each panel user's text in the **pre-baseline** (August) and **post-outcome** (December–May) windows using the SVM classifiers, then merges with exposure labels to build the analysis panel.
 
@@ -154,9 +158,9 @@ Scores each panel user's text in the **pre-baseline** (August) and **post-outcom
 
 ---
 
-## Notebook 04 — Community Breadth Collection
+## Notebook 05 — Community Breadth Collection
 
-**File**: `notebooks/04_collect_community_breadth.ipynb`
+**File**: `notebooks/05_collect_community_breadth.ipynb`
 
 Queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each v2 panel user's activity across all of Reddit during the study window.
 
@@ -180,9 +184,9 @@ Queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each 
 
 ---
 
-## Notebook 05 — PSM + DiD Analysis
+## Notebook 06 — PSM + DiD Analysis
 
-**File**: `notebooks/05_did_analysis_v2.ipynb`
+**File**: `notebooks/06_did_analysis_v2.ipynb`
 
 The main results notebook. Runs propensity-score matching and difference-in-differences regression using `mean_mh_score` as the outcome.
 
@@ -214,8 +218,10 @@ See [Results](results.md) for the output.
 
 ---
 
-## Notebook 06 — VADER DiD Baseline (optional)
+## Notebook 07 — VADER DiD Baseline (optional)
 
-**File**: `notebooks/06_did_analysis_vader_baseline.ipynb`
+**File**: `notebooks/07_did_analysis_vader_baseline.ipynb`
 
 Runs the DiD pipeline using VADER `distress_score` as the outcome instead of SVM `mh_score`. Useful as a robustness check — if the SVM and VADER results point in the same direction, the finding is not an artefact of the measurement choice.
+
+> Note: This notebook uses old pipeline outputs from `data/processed/` and the ±2-week event-study design. It is kept for comparison purposes only. The main results are in notebook 06.
