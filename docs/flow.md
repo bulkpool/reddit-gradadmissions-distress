@@ -8,243 +8,142 @@ This document explains every step of the research pipeline: what each notebook d
 
 ```mermaid
 flowchart TD
-    RAW["📁 Raw Data\nr_gradadmissions_posts.cleaned.jsonl\nr_gradadmissions_comments.cleaned.jsonl\n469,163 posts & comments\nAug 2023 – Jul 2025"]
+    RAW["📁 Raw Data\nr_gradadmissions_posts.jsonl (286 MB)\nr_gradadmissions_comments.jsonl (847 MB)"]
 
-    N01["01_score_corpus.ipynb\nVADER sentiment scoring\n→ scored_corpus.parquet"]
-    N02["02_anchor_events.ipynb\nIdentify distress events\n→ anchor_posts.parquet\n→ exposure_labels.parquet\n→ user_weekly_scores.parquet"]
-    N04["04_collect_community_breadth.ipynb\nQuery Arctic Shift per user\n→ user_community_breadth.parquet"]
-    N05["03_train_classifiers.ipynb\nTrain 3 LinearSVC models\n→ scored_corpus_v2.parquet\n→ user_weekly_scores_v2.parquet"]
-    N06["05_did_analysis_v2.ipynb\nPropensity matching + DiD\n→ RQ1 & RQ2 results"]
+    ARCTIC_TRAIN["🌐 Arctic Shift API\nTraining data (Jan 2022–Jul 2023)\nr/anxiety, r/depression, r/stress\n+ 4 control subreddits"]
+    ARCTIC_BREADTH["🌐 Arctic Shift API\n/api/users/interactions/subreddits\nDistinct subreddits per user"]
 
-    ARCTIC["🌐 Arctic Shift API\narctic-shift.photon-reddit.com\nTraining data: r/anxiety,\nr/depression, r/stress,\n+ 4 control subreddits"]
-    ARCTIC2["🌐 Arctic Shift API\n/api/users/interactions/subreddits\nDistinct subreddits per user"]
+    N01["01_score_corpus.ipynb\nCorpus cleaning\n→ posts_clean.jsonl\n→ comments_clean.jsonl\n(with post_id mapping)"]
+    N03["03_train_classifiers.ipynb\nTrain 3 LinearSVC models\n→ clf_anxiety/depression/stress.joblib"]
+    N07["07_exposure_labels_v2.ipynb\nAnchor post identification\nThread-level exposure via link_id\n→ anchor_posts_v2.parquet\n→ exposure_labels_v2.parquet"]
+    N02["02_anchor_events.ipynb\nPanel scoring (pre/post windows)\n→ panel_scores_v2.parquet"]
+    N04["04_collect_community_breadth.ipynb\nReuse cache + fetch new users\n→ user_community_breadth_v2.parquet"]
+    N05["05_did_analysis_v2.ipynb\nPSM + DiD (pre/post design)\n→ RQ1 & RQ2 results"]
 
-    RQ1["✅ RQ1 Result\nExposure → +0.013 mh_score\np < 0.0001"]
-    RQ2["✅ RQ2 Result\nBreadth amplifies effect\n+0.003 per log-breadth unit\np = 0.014"]
+    RQ1["✅ RQ1\nExposure → Δ mh_score\nperiod×exposed coefficient\nHC3 SEs, Cycle 1 + 2 + Pooled"]
+    RQ2["✅ RQ2\nCommunity breadth moderation\nperiod×exposed×breadth_log\nthree-way interaction"]
 
     RAW --> N01
+    ARCTIC_TRAIN --> N03
+    N01 --> N07
+    N03 --> N07
     N01 --> N02
-    ARCTIC --> N05
+    N03 --> N02
+    N07 --> N02
+    ARCTIC_BREADTH --> N04
     N02 --> N04
     N02 --> N05
-    ARCTIC2 --> N04
-    N04 --> N06
-    N05 --> N06
-    N06 --> RQ1
-    N06 --> RQ2
+    N04 --> N05
+    N05 --> RQ1
+    N05 --> RQ2
 ```
 
 ---
 
-## Stage 1 — Measuring Distress
+## Stage 1 — Cleaning the Corpus
 
-### Notebook 01 — VADER Scoring (baseline)
+### Notebook 01 — Corpus Cleaning
 
-VADER is a rule-based sentiment lexicon (~7,500 words with pre-assigned scores). Every post and comment gets scored:
+Reads the raw JSONL dumps (not pre-cleaned) and produces canonical clean files for all downstream notebooks.
 
-- `vader_compound` ∈ [−1, 1] — overall sentiment
-- `distress_score` = `vader_neg` — fraction of negative words
+**Key output — `post_id` on comments**: each comment gets a `post_id` field derived from its `link_id` (stripping the Reddit `t3_` prefix). This directly links a comment to its parent post thread and was missing from the old pipeline. Without it, exposure had to be approximated by same-week activity; now it is based on actual thread participation.
 
-**Limitation**: VADER sees "rejected" as negative whether someone is venting distress *or* asking "what rejection rate is normal?" It conflates topic language with emotional state. This is why VADER alone only reaches p = 0.077 in the DiD — not enough signal.
-
-### Notebook 05 — SVM Mental Health Classifiers (main measure)
-
-We follow the methodology from Low et al. (2020), who train classifiers on mental health subreddits as a proxy for distress.
-
-**Training data** (pulled from Arctic Shift, Jan 2022–Jul 2023):
-
-| Class | Subreddits | Posts pulled |
-|---|---|---|
-| Positive (distressed) | r/anxiety, r/depression, r/stress | 2,000 each |
-| Negative (control) | r/personalfinance, r/learnprogramming, r/todayilearned, r/careerguidance | 2,000 each |
-
-The training window predates our study period (Aug 2023+) to prevent data leakage.
-
-**Features**: TF-IDF on unigrams + bigrams, max 50,000 features, `sublinear_tf=True`, `min_df=3`. TF-IDF weights words that are frequent in a document but rare across documents — so "panic attack" scores high in r/anxiety posts but not in r/personalfinance posts.
-
-**Model**: LinearSVC (`C=1.0`, `class_weight='balanced'`), validated with 5-fold cross-validation. Three separate classifiers are trained — one per mental health class.
-
-**Scoring**: `decision_function()` (continuous distance from decision boundary) passed through sigmoid, then averaged:
-
-```
-mh_score = mean(
-    sigmoid(anxiety_decision_function),
-    sigmoid(depression_decision_function),
-    sigmoid(stress_decision_function)
-)
-```
-
-A post scoring 0.8 on all three is linguistically similar to r/anxiety, r/depression, and r/stress content simultaneously. A post scoring 0.1 looks like it belongs in the control subreddits.
-
-**Output**: `scored_corpus_v2.parquet` — every record now has `mh_score` ∈ [0, 1].
+**Text normalization** produces a `clean_text` field: lowercase → strip URLs → strip non-alphanumeric → collapse whitespace. The original body is preserved separately.
 
 ---
 
-## Stage 2 — Identifying Anchor Events
+## Stage 2 — Measuring Distress
 
-### Notebook 02 — Anchor Post Identification
+### Notebook 03 — SVM Classifiers
 
-An **anchor post** is a high-distress disclosure that serves as the causal event. Two conditions must both hold:
+Three binary SVMs (anxiety / depression / stress) are trained on mental health subreddit posts vs. control subreddit posts, following Low et al. (2020).
 
-1. **Keyword match**: contains at least one of 18 regex patterns covering negative admissions outcomes and emotional distress language (e.g., `\breject(ed|ion)\b`, `\banxi(ous|ety)\b`, `\bfalling apart\b`, `\bcan't cope\b`)
-2. **Distress threshold**: `vader_compound < −0.05` OR `vader_neg > 0.10` — the post is genuinely distressed, not just on-topic
+**Why not VADER?** VADER assigns a negative score to any negative word regardless of context. "I got rejected, what are my chances next cycle?" scores as distressed even though the poster is being pragmatic. The SVMs learn the *style* of distressed writing — the self-referential framing, help-seeking language, and emotional vocabulary specific to mental health communities. They generalise much better to distress in an academic stress context.
 
-Posts with Reddit outcome flair `Rejected` or `Waitlisted` are also included if they pass the distress threshold (self-labeled by the author).
-
-**Result**: 7,075 anchor posts identified across 104 weeks.
-
-**User-weekly aggregation**: For every `(author, week)` pair, compute the mean `mh_score` across all their activity that week. This is the **outcome variable** for DiD.
-
-**Exposure classification**:
-
-```mermaid
-flowchart LR
-    AW["Anchor event in week W"]
-    EXP["Exposed user\nAuthored an anchor post\nin week W"]
-    UNEXP["Unexposed user\nActive in week W\nbut no anchor post"]
-    AW --> EXP
-    AW --> UNEXP
-```
+**Composite**: `mean_mh_score = mean(anx_score, dep_score, str_score)` ∈ (0, 1). Higher = more distress-like language.
 
 ---
 
-## Stage 3 — Community Breadth
+## Stage 3 — Defining Exposure
 
-### Notebook 04 — Arctic Shift User Queries
+### Notebook 07 — Anchor Posts & Exposure Labels (v2)
 
-For RQ2, we need to know how many subreddits each user participates in outside r/GradAdmissions.
+Defines who is **exposed** (treated) and who is **unexposed** (control) for each admission cycle.
 
-**API call per user**:
-```
-GET /api/users/interactions/subreddits
-    ?author={username}
-    &after=2023-08-01
-    &before=2025-07-31
-```
+**Anchor posts** are the "treatment events": high-distress posts in the Sep–Nov anchor period that match negative admissions keywords and score above `mean_mh_score > 0.45`.
 
-**community_breadth** = count of distinct subreddits returned, excluding r/gradadmissions itself. Log-transformed (`community_breadth_log`) before regression to handle the right-skewed distribution.
+**Exposed users** are those who commented on an anchor post thread — identified via `link_id` matching, not same-week activity. Anchor post authors themselves are excluded (they authored the distress, they weren't passively exposed to it).
 
-The script saves a checkpoint every 500 users — safe to interrupt and resume (~25,000 users at 2.5 req/sec takes ~3 hours).
+**Unexposed users** were active in the subreddit across the full Aug–May window but never commented on any anchor thread.
 
----
+Two cycles are processed independently:
 
-## Stage 4 — Causal Inference
-
-### Notebook 06 — DiD Analysis
-
-#### Step A — Propensity Score Matching
-
-Exposed users (those who posted anchor posts) may already be more distressed than unexposed users — not because of the event, but because they were always more distressed. PSM corrects for this.
-
-```mermaid
-flowchart TD
-    FEAT["Features: pre-event mh_score + pre-event post count"]
-    LR["Logistic Regression\n→ propensity score per user\n(probability of being exposed)"]
-    MATCH["1:1 Nearest-Neighbor Matching\ncaliper = 0.05\n(must be within 5pp on propensity score)"]
-    OUT["Matched sample: exposed + unexposed users\nwith comparable pre-event baselines"]
-    FEAT --> LR --> MATCH --> OUT
-```
-
-After matching, the two groups have statistically similar pre-event mh_scores and posting volumes. Any post-event difference is more plausibly *caused* by exposure.
-
-#### Step B — Difference-in-Differences (RQ1)
-
-We build a ±2 week panel around each anchor event (week 0 excluded):
-
-```
-pre-period: offsets -2, -1  →  post = 0
-post-period: offsets +1, +2  →  post = 1
-```
-
-Regression formula:
-```
-mh_score ~ post + exposed + post×exposed + log(n_posts)
-```
-
-| Term | What it captures |
-|---|---|
-| `post` | General time trend — scores change post-event for everyone |
-| `exposed` | Baseline difference — exposed users may start higher |
-| `post × exposed` | **The DiD estimate** — additional change for exposed users post-event |
-| `log(n_posts)` | Controls for posting volume (more posts = more stable score) |
-
-HC3 robust standard errors are used throughout — these don't assume equal error variance across users (important when activity levels vary widely).
-
-**Result**: DiD = **+0.013** (95% CI [0.010, 0.016]), p < 0.0001.
-
-```mermaid
-flowchart LR
-    PRE["Pre-event weeks\noffsets -2, -1"]
-    POST["Post-event weeks\noffsets +1, +2"]
-    EXP["Exposed group\n↑ mh_score after event"]
-    UNEXP["Unexposed group\n↔ mh_score stable"]
-    DID["DiD = difference in differences\n+0.013, p < 0.0001"]
-    PRE --> EXP --> DID
-    PRE --> UNEXP --> DID
-    POST --> EXP
-    POST --> UNEXP
-```
-
-#### Step C — Moderation by Community Breadth (RQ2)
-
-The **stress-buffering hypothesis** predicts: users active in more subreddits have broader social support networks, so they should show a *smaller* distress response.
-
-Extended regression:
-```
-mh_score ~ post + exposed + post×exposed
-         + community_breadth_log
-         + post×exposed×community_breadth_log
-         + log(n_posts)
-```
-
-The triple interaction `post×exposed×breadth_log` is the key term — it measures whether breadth changes the size of the DiD effect.
-
-**Result**: coefficient = **+0.003**, p = 0.014.
-
-The stress-buffering hypothesis is **not supported**. Higher breadth is associated with a *larger* distress response. Possible explanations:
-- Highly active users encounter more negative content across the platform generally
-- Subreddit count is a poor proxy for meaningful social support
-- Active users may be more emotionally invested in the outcome of their applications
-
-#### Step D — Validity Checks
-
-**Parallel trends (event study)**:
-
-```mermaid
-flowchart LR
-    O1["offset -2\nExposed ≈ Unexposed"]
-    O2["offset -1\nExposed ≈ Unexposed"]
-    O3["event\n(week 0, excluded)"]
-    O4["offset +1\nExposed > Unexposed"]
-    O5["offset +2\nExposed > Unexposed"]
-    O1 --> O2 --> O3 --> O4 --> O5
-```
-
-The two groups track together before the event (parallel pre-trends) and diverge after — confirming the DiD assumption holds.
-
-**Cross-cycle replication**: The full DiD is run separately on 2023–24 and 2024–25 admissions cycles. Both cycles show significant effects independently, ruling out a single-year anomaly.
+| | Cycle 1 | Cycle 2 |
+|-|---------|---------|
+| Anchor period | Sep–Nov 2023 | Sep–Nov 2024 |
+| Active window | Aug 2023–May 2024 | Aug 2024–May 2025 |
 
 ---
 
-## File Output Summary
+## Stage 4 — Building the Panel
 
-| Notebook | Key output files |
-|---|---|
-| 01 | `data/processed/scored_corpus.parquet` |
-| 02 | `data/processed/anchor_posts.parquet`, `exposure_labels.parquet`, `user_weekly_scores.parquet` |
-| 04 | `data/processed/user_community_breadth.parquet` |
-| 05 | `models/clf_anxiety.joblib`, `clf_depression.joblib`, `clf_stress.joblib`, `data/processed/scored_corpus_v2.parquet`, `user_weekly_scores_v2.parquet` |
-| 06 | `figures/fig_event_study_v2.png`, `figures/fig_did_results_v2.png` |
+### Notebook 02 — Panel Scoring
+
+Scores each panel user's own posts and comments in two windows:
+
+- **Pre-baseline (August)**: before the anchor period begins — captures baseline distress level
+- **Post-outcome (December–May)**: after the anchor period — captures whether distress language changed
+
+The SVM classifiers score every post/comment; scores are averaged per (user, cycle, window) to produce `pre_mh_score` and `post_mh_score`.
+
+**Why August and December–May?** August is the quiet period before application season heats up — a clean baseline uncontaminated by admissions stress. December–May is peak decision season: offers, rejections, waitlists. If exposure to anchor posts during Sep–Nov shifts a user's distress trajectory, it should be detectable by comparing their August baseline to their Dec–May language.
+
+### Notebook 04 — Community Breadth
+
+Pulls each panel user's activity across all of Reddit to compute how many distinct communities they participate in. This is the moderator variable for RQ2.
+
+**Reuse strategy**: the old pipeline already fetched breadth for ~25k users. Notebook 04 loads that cache and only queries Arctic Shift for new users in the v2 panel not already covered — avoiding redundant API calls.
+
+`community_breadth_log = log1p(breadth)` is used in regression to handle the right-skewed distribution.
 
 ---
 
-## Why the Design Is Credible
+## Stage 5 — Causal Estimation
 
-| Concern | How it is addressed |
-|---|---|
-| Distressed users just post more | PSM equalizes pre-event posting volume |
-| VADER captures topic, not distress | Replaced with SVMs trained on mental health communities |
-| Exposed users were already more distressed | PSM matches on pre-event mh_score |
-| No parallel pre-trends = invalid DiD | Event study confirms flat pre-trends at −2, −1 |
-| Heteroskedastic errors inflate significance | HC3 robust standard errors throughout |
-| Single-year fluke | Cross-cycle replication across 2023–24 and 2024–25 |
+### Notebook 05 — PSM + DiD
+
+**Propensity Score Matching** (per cycle): matches each exposed user to the most similar unexposed user on `pre_mh_score` + `pre_n_posts` (August baseline). Matching ensures that the exposed and unexposed groups had similar mental health language *before* any exposure occurred, making the post-period comparison causally cleaner.
+
+**Difference-in-Differences** estimates the Average Treatment Effect on the Treated (ATT):
+
+```
+mh_score ~ period + exposed + period×exposed + log1p(n_posts)
+```
+
+The `period×exposed` coefficient is the DiD estimate — the *additional* change in mh_score for exposed users relative to the change for matched unexposed users. HC3 robust standard errors correct for heteroskedasticity.
+
+**RQ2** adds a three-way interaction with `community_breadth_log` to test whether users with broader community networks experience a buffered (or amplified) response.
+
+**Cross-cycle replication**: the full analysis is run separately for Cycle 1 and Cycle 2, then pooled with a cycle fixed effect. Consistent results across both cycles strengthen the causal interpretation.
+
+---
+
+## Data Flow Summary
+
+```
+data/raw/*.jsonl
+    └─ NB01 ──► data/processed_v2/posts_clean.jsonl
+                data/processed_v2/comments_clean.jsonl
+                    │
+                    ├─ NB07 ──► data/processed_v2/exposure_labels_v2.parquet
+                    │                           anchor_posts_v2.parquet
+                    │               │
+                    └─ NB02 ◄───────┘ + models/clf_*.joblib
+                        └──► data/processed_v2/panel_scores_v2.parquet
+                                    │
+                            NB04 ◄──┘ + Arctic Shift API (new users only)
+                             └──► data/processed_v2/user_community_breadth_v2.parquet
+                                            │
+                            NB05 ◄──────────┘
+                             └──► figures/ + regression tables
+```
