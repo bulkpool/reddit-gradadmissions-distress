@@ -31,7 +31,7 @@ The unexposed group's distress *decreases* slightly after the event week (natura
 | **post × exposed** | **+0.004** | **0.077** | **+0.013** | **< 0.0001** |
 | log(1 + n_posts) | −0.002 | 0.045 | — | — |
 
-**The SVM measure is significant (p < 0.0001); VADER alone falls short (p = 0.077).** The SVM classifiers capture the linguistic style of distressed writing more precisely than VADER's general-purpose lexicon.
+**The SVM measure is significant (p < 0.0001); VADER alone falls short (p = 0.077).** The SVM classifiers trained on posts from r/anxiety, r/depression, and r/stress, and capture the linguistic style of distressed writing more precisely than VADER's general-purpose lexicon.
 
 ### Interpretation
 
