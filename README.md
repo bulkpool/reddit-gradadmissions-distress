@@ -81,7 +81,7 @@ The distress measure is a composite SVM score (`mh_score`) trained on r/anxiety,
 ```
 
 ---
-
+ 
 ## Documentation
 
 | Doc | What's in it |
