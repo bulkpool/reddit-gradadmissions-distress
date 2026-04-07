@@ -8,127 +8,136 @@ This guide walks you through setting up the environment and running the full pip
 
 ### Python Environment
 
-All notebooks use a Jupyter Python environment. Install the required packages once:
+All notebooks use a Jupyter Python environment. The project uses a venv at `~/venvs/jupyter/`. Install required packages:
 
 ```bash
-pip install vaderSentiment scikit-learn statsmodels joblib pandas numpy matplotlib requests
+~/venvs/jupyter/bin/pip install \
+    vaderSentiment scikit-learn statsmodels joblib \
+    pandas numpy matplotlib requests causalimpact
 ```
+
+> `causalimpact 0.2.6` has a pandas 2.x incompatibility; NB08 patches it at runtime automatically.
 
 ### Raw Data
 
-The raw Reddit data is **not included** in this repository (files are 125 MB and 275 MB). Place the following files in `data/raw/` before running:
+Raw Reddit data lives at the **repository root** (not in `data/`). Place these files there:
 
 ```
-data/raw/
-├── r_gradadmissions_posts.cleaned.jsonl      # 88,441 posts
-└── r_gradadmissions_comments.cleaned.jsonl   # 380,722 comments
+r_gradadmissions_posts.jsonl          # Raw posts
+r_gradadmissions_comments.jsonl       # Raw comments
+r_gradadmissions_posts.cleaned.jsonl  # Pre-cleaned posts (used by old NB07 baseline)
+r_gradadmissions_comments.cleaned.jsonl
 ```
 
 ---
 
 ## What's Already in the Repo
 
-You don't need to re-run everything from scratch. Several expensive steps are pre-computed and included:
+Several expensive steps are pre-computed and included:
 
 | Already included | Skips |
 |-----------------|-------|
-| `data/processed/user_community_breadth.parquet` | ~3 hours of Arctic Shift API calls (notebook 04) |
-| `data/processed/training_data_raw.parquet` | ~15 min of API calls for training data (notebook 03) |
-| `models/clf_*.joblib` | SVM classifier training (notebook 03) |
-| `data/processed/user_weekly_scores_v2.parquet` | Weekly score aggregation (notebook 03) |
-
-The two files you **must** generate are:
-- `data/processed/scored_corpus.parquet` — run notebook 01 (~2 min)
-- `data/processed/scored_corpus_v2.parquet` — run notebook 03 (scoring only, ~5 min)
+| `models/clf_anxiety.joblib` etc. | SVM classifier training (~15 min API + training) |
+| `data/processed_v2/panel_scores_v2.parquet` | Pre/post scoring pass |
+| `data/processed_v2/panel_scores_alt.parquet` | NB08 Sep–Nov panel |
+| `data/processed_v2/post_level_scores_v2.parquet` | Post-level DiD dataset |
+| `data/processed_v2/dose_exposure_v2.parquet` | Dose-response dataset |
+| `data/processed_v2/exposure_labels_v2.parquet` | Exposure classification |
+| `data/processed_v2/anchor_posts_v2.parquet` | Anchor post list |
+| `data/processed_v2/user_community_breadth_v2.parquet` | Breadth (~3 hr API run) |
+| `data/processed_v2/breadth_checkpoint_v2.jsonl` | API checkpoint (resumable) |
+| `figures/*.png` | All output figures |
 
 ---
 
 ## Execution Order
 
-Run notebooks in this order. Each one reads outputs from the previous.
-
 ```
-01_score_corpus.ipynb              (~2 min)
-02_anchor_events.ipynb             (~1 min)
-03_train_classifiers.ipynb         (~5 min if skipping API pull)
-04_collect_community_breadth.ipynb (SKIP — already done, see above)
-05_did_analysis_v2.ipynb           (~5 min) ← main results
-06_did_analysis_vader_baseline.ipynb (~2 min, optional — VADER comparison)
+01 → 02 → 03 → 04 → 05 → 06    (main pipeline)
+                          └→ 08  (alternative analysis)
+00  (EDA, standalone)
+07  (optional VADER baseline)
 ```
 
-See [Pipeline](pipeline.md) for what each notebook does in detail.
+| Step | Notebook | Runtime | Notes |
+|------|----------|---------|-------|
+| 1 | `01_clean_corpus.ipynb` | ~5 min | Reads raw JSONL from repo root |
+| 2 | `02_train_classifiers.ipynb` | ~15 min | Skip if `models/clf_*.joblib` exist |
+| 3 | `03_exposure_labels_v2.ipynb` | ~3 min | — |
+| 4 | `04_panel_scores.ipynb` | ~10 min | — |
+| 5 | `05_collect_community_breadth.ipynb` | ~3 hr | Skip — already done, see above |
+| 6 | `06_did_analysis_v2.ipynb` | ~2 min | Main results |
+| 7 | `08_alt_analysis.ipynb` | ~15 min | Reads raw JSONL; needs causalimpact |
 
 ---
 
 ## Step-by-step
 
-### Step 1 — Score the Corpus (`01_score_corpus.ipynb`)
+### Step 1 — Clean the Corpus (`01_clean_corpus.ipynb`)
 
-Applies VADER sentiment analysis to all 467,525 posts and comments.
+Applies text normalization, deduplication, bot filtering, and adds `post_id` mapping to comments (derived from `link_id`). All downstream notebooks depend on this.
 
-**Reads**: `data/raw/r_gradadmissions_posts.cleaned.jsonl`, `data/raw/r_gradadmissions_comments.cleaned.jsonl`
+**Reads**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (repo root)
 
-**Writes**: `data/processed/scored_corpus.parquet` *(required — not in repo)*
-
-**Runtime**: ~2 minutes
+**Writes**: `data/processed_v2/posts_clean.jsonl`, `data/processed_v2/comments_clean.jsonl`
 
 ---
 
-### Step 2 — Find Anchor Events (`02_anchor_events.ipynb`)
+### Step 2 — Train SVM Classifiers (`02_train_classifiers.ipynb`)
 
-Identifies the 7,075 high-distress "anchor posts" and classifies all users as exposed or unexposed for each event week.
+Trains three binary SVMs (anxiety, depression, stress) via Arctic Shift API pulls from mental health subreddits.
 
-**Reads**: `data/processed/scored_corpus.parquet`
+> **Shortcut**: Skip this step — `models/clf_*.joblib` are already in the repo.
 
-**Writes**: `data/processed/anchor_posts.parquet`, `data/processed/user_weekly_scores.parquet`, `data/processed/exposure_labels.parquet`
-
-**Runtime**: ~1 minute
+**Writes**: `models/clf_anxiety.joblib`, `clf_depression.joblib`, `clf_stress.joblib`
 
 ---
 
-### Step 3 — Train Classifiers & Score Corpus (`03_train_classifiers.ipynb`)
+### Step 3 — Exposure Labels (`03_exposure_labels_v2.ipynb`)
 
-Trains three SVM mental-health classifiers (anxiety, depression, stress) and scores the full corpus.
+Identifies anchor posts and classifies all panel users as exposed (commented on anchor thread via `link_id`) or unexposed.
 
-> **Shortcut**: The trained models (`models/clf_*.joblib`) and training data (`data/processed/training_data_raw.parquet`) are already in the repo. The only thing you need to run is the **scoring section** (cells 4–6) to produce `scored_corpus_v2.parquet`.
-
-**Reads**: `data/processed/scored_corpus.parquet`, `data/processed/training_data_raw.parquet`
-
-**Writes**: `data/processed/scored_corpus_v2.parquet` *(required — not in repo)*, `data/processed/user_weekly_scores_v2.parquet`
-
-**Runtime**: ~5 minutes (scoring only)
+> **Shortcut**: Skip — `data/processed_v2/exposure_labels_v2.parquet` and `anchor_posts_v2.parquet` are included.
 
 ---
 
-### Step 4 — Community Breadth (`04_collect_community_breadth.ipynb`) — *already done*
+### Step 4 — Panel Scoring (`04_panel_scores.ipynb`)
 
-> **Skip this step** — `data/processed/user_community_breadth.parquet` is already in the repo.
+Scores every panel user's August (pre) and Dec–May (post) text. Also produces post-level scores and dose-exposure data.
 
-This notebook queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each user's cross-subreddit activity. It took ~3 hours to run (25,316 API requests). The checkpoint file (`data/processed/breadth_checkpoint.jsonl`) is also included — if you do want to re-run, it will resume from where it left off.
-
----
-
-### Step 5 — Main DiD Analysis (`05_did_analysis_v2.ipynb`)
-
-Runs the full causal analysis: propensity score matching, DiD regression, RQ1, RQ2, cross-cycle replication, and event study plot.
-
-**Reads**: `data/processed/user_weekly_scores_v2.parquet`, `data/processed/exposure_labels.parquet`, `data/processed/user_community_breadth.parquet`
-
-**Writes**: `figures/fig_event_study_v2.png`
-
-**Runtime**: ~5 minutes
+> **Shortcut**: Skip — all three output parquets are included.
 
 ---
 
-### Step 6 — VADER DiD Baseline (`06_did_analysis_vader_baseline.ipynb`) — *optional*
+### Step 5 — Community Breadth (`05_collect_community_breadth.ipynb`) — *skip*
 
-First-pass DiD using VADER scores. Useful as a comparison to the SVM results but not required.
+> **Skip this step** — `data/processed_v2/user_community_breadth_v2.parquet` is included.
 
-**Reads**: `data/processed/scored_corpus.parquet`, `data/processed/user_weekly_scores.parquet`, `data/processed/exposure_labels.parquet`, `data/processed/anchor_posts.parquet`, `data/processed/user_community_breadth.parquet`
+Makes ~21k Arctic Shift API requests. Checkpoint in `data/processed_v2/breadth_checkpoint_v2.jsonl` — safe to resume if re-running.
 
-**Writes**: figures only
+---
 
-**Runtime**: ~2 minutes
+### Step 6 — Main DiD Analysis (`06_did_analysis_v2.ipynb`)
+
+Runs PSM, user-level DiD (RQ1 + RQ2), post-level DiD, and dose-response analysis.
+
+**Reads**: `data/processed_v2/panel_scores_v2.parquet`, `user_community_breadth_v2.parquet`
+
+**Writes**: figures to `figures/`
+
+**Runtime**: ~2 min
+
+---
+
+### Step 7 — Alternative Analysis (`08_alt_analysis.ipynb`)
+
+Redefines the pre-period to Sep–Nov (4× more matched pairs) and runs Causal Impact.
+
+**Reads**: raw JSONL from repo root, `exposure_labels_v2.parquet`, `anchor_posts_v2.parquet`, `user_community_breadth_v2.parquet`, `models/clf_*.joblib`
+
+**Writes**: `data/processed_v2/panel_scores_alt.parquet`, `figures/fig_causal_impact_*.png`, `figures/fig_parallel_trends_alt.png`
+
+**Runtime**: ~15 min (rescores all raw text)
 
 ---
 
@@ -136,16 +145,18 @@ First-pass DiD using VADER scores. Useful as a comparison to the SVM results but
 
 | File | In Repo | How to Get It |
 |------|---------|---------------|
-| `data/raw/*.cleaned.jsonl` | No | Obtain from data source |
-| `data/processed/scored_corpus.parquet` (92 MB) | No | Run notebook 01 |
-| `data/processed/scored_corpus_v2.parquet` (108 MB) | No | Run notebook 05 |
-| `data/processed/anchor_posts.parquet` | Yes | — |
-| `data/processed/user_weekly_scores.parquet` | Yes | — |
-| `data/processed/user_weekly_scores_v2.parquet` | Yes | — |
-| `data/processed/exposure_labels.parquet` | Yes | — |
-| `data/processed/user_community_breadth.parquet` | Yes | — |
-| `data/processed/training_data_raw.parquet` | Yes | — |
-| `data/processed/breadth_checkpoint.jsonl` | Yes | — |
+| `r_gradadmissions_posts.jsonl` | No | Obtain from data source |
+| `r_gradadmissions_comments.jsonl` | No | Obtain from data source |
+| `data/processed_v2/posts_clean.jsonl` | No | Run NB01 |
+| `data/processed_v2/comments_clean.jsonl` | No | Run NB01 |
+| `data/processed_v2/panel_scores_v2.parquet` | Yes | — |
+| `data/processed_v2/panel_scores_alt.parquet` | Yes | — |
+| `data/processed_v2/post_level_scores_v2.parquet` | Yes | — |
+| `data/processed_v2/dose_exposure_v2.parquet` | Yes | — |
+| `data/processed_v2/exposure_labels_v2.parquet` | Yes | — |
+| `data/processed_v2/anchor_posts_v2.parquet` | Yes | — |
+| `data/processed_v2/user_community_breadth_v2.parquet` | Yes | — |
+| `data/processed_v2/breadth_checkpoint_v2.jsonl` | Yes | — |
 | `models/clf_anxiety.joblib` | Yes | — |
 | `models/clf_depression.joblib` | Yes | — |
 | `models/clf_stress.joblib` | Yes | — |

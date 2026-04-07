@@ -8,24 +8,25 @@ This document covers the key design concepts, terminology, and limitations of th
 
 ### Anchor Post
 
-A Reddit post identified as a **high-distress negative disclosure** related to graduate admissions. These are the treatment events — posts that expose their authors (and readers) to negative outcomes and anxious language.
+A Reddit post identified as a **high-distress negative disclosure** related to graduate admissions. These are the treatment events.
 
-A post qualifies as an anchor if:
-1. It contains a negative keyword (reject, decline, waitlist, funding lost, anxiety, depressed, stress, falling apart...) **and** scores above the distress threshold (`vader_compound < −0.05` or `vader_neg > 0.10`)
-2. **Or** the post's self-labeled outcome is Rejected/Waitlisted and it's above the distress threshold
+A post qualifies as an anchor if it meets all three criteria:
+1. Falls within the anchor period: Sep 1–Nov 30 of the cycle year
+2. Matches a negative keyword list (reject, decline, waitlist, anxiety, depressed, stress, falling apart…)
+3. `mh_score > 0.45` from the three SVM classifiers
 
-**Result**: 7,075 anchor posts from 5,471 unique authors.
+**Result**: varies by cycle; see `data/processed_v2/anchor_posts_v2.parquet`.
 
 ---
 
 ### Exposure
 
-Whether a user was **treated** in a given event week.
+Whether a user was **treated** in a given cycle.
 
-- **Exposed**: authored an anchor post that week
-- **Unexposed**: active on r/GradAdmissions the same week but didn't author any anchor post
+- **Exposed**: user commented on an anchor post thread, identified via `link_id` in the raw JSONL matching the anchor post's `id`. Anchor post *authors* are excluded.
+- **Unexposed**: active in r/GradAdmissions during the full Aug 1–May 31 window of that cycle but never commented on any anchor thread.
 
-**Why authorship?** The dataset doesn't include `link_id` on comments, so we can't reconstruct who read a specific post. Authorship is a conservative proxy — the author is unambiguously exposed. This means our DiD estimate is a **lower bound** on the true effect of reading a negative post.
+Exposure is identified at thread level using `link_id` (raw comments field: `link_id = "t3_<post_id>"`). The cleaned files carry this as `post_id` after stripping the `t3_` prefix.
 
 ---
 
@@ -37,12 +38,12 @@ A causal inference method that removes the influence of time trends by comparing
 
 **Regression**:
 ```
-mh_score = β₀ + β₁·post + β₂·exposed + β₃·(post × exposed) + β₄·log(n_posts) + ε
+mh_score = β₀ + β₁·period + β₂·exposed + β₃·(period × exposed) + β₄·log(n_posts) + ε
 ```
 
 `β₃` is the DiD estimate — the effect of exposure, net of time trends. Positive = exposure increases distress.
 
-**Why not just compare before/after?** Distress naturally rises during peak admissions season. DiD removes this by using the unexposed group as a counterfactual experiencing the same time trends without the exposure.
+**Why not just compare before/after?** Distress naturally rises during peak admissions season. DiD removes this confound by using the unexposed group as a counterfactual experiencing the same time trends without the exposure.
 
 ---
 
@@ -50,44 +51,71 @@ mh_score = β₀ + β₁·post + β₂·exposed + β₃·(post × exposed) + β�
 
 DiD's key assumption: absent treatment, the exposed and unexposed groups would have followed the same distress trajectory.
 
-We verify this with the **event study plot** — plotting distress at each of the four observation weeks (−2, −1, +1, +2). The lines should be close and parallel in the pre-period and diverge only after the event. Our plots confirm this.
+Verified with the parallel trends plot (`fig_parallel_trends_v2.png` for NB06, `fig_parallel_trends_alt.png` for NB08) — pre-period means should be close across groups.
 
 ---
 
-### Propensity Score Matching
+### Propensity Score Matching (PSM)
 
-Because exposed users (those who wrote distressed posts) may already be more anxious than average, a direct comparison would pick up baseline differences rather than the causal effect. Matching corrects for this.
+Because exposed users (those who engaged with distressed content) may differ from unexposed users in baseline characteristics, a direct comparison risks confounding. PSM corrects for this.
 
-**Process**:
-1. For each (user, event_week), compute pre-event features: mean mh_score, total post count
-2. Fit logistic regression predicting `exposed` from these features → **propensity score** (probability of being exposed given pre-treatment characteristics)
-3. Match each exposed user to the unexposed user with the closest propensity score (caliper = 0.05)
-4. Only matched pairs enter the DiD regression
+**Process** (1:1 nearest-neighbor, per cycle):
+1. Fit logistic regression predicting `exposed` from `pre_mh_score + log1p_n_posts_pre` (+ `community_breadth_log` if ≥ 95% coverage)
+2. Compute propensity score (probability of exposure given pre-treatment characteristics)
+3. Match each exposed user to the nearest unexposed user (caliper = 0.05 on propensity score)
+4. Check balance via Standardised Mean Differences (SMD < 0.1 target)
+5. Only matched pairs enter the DiD regression
 
-**Result**: 2,843 matched pairs from ~2,844 eligible exposed observations.
+**NB06 result**: ~155 matched pairs/cycle (August pre-period → sparse; low power).
+**NB08 result**: ~668 matched pairs/cycle (Sep–Nov pre-period → 4× improvement).
 
 ---
 
 ### mh_score
 
-The primary outcome variable. A continuous score ∈ (0, 1) measuring how closely a user's weekly writing resembles posts from mental health subreddits.
+The primary outcome variable. Continuous ∈ (0, 1), measuring how closely a user's writing resembles posts from mental health subreddits.
 
 ```
-mh_score = mean(anx_score, dep_score, str_score)
+mh_score = mean(sigmoid(anx_df), sigmoid(dep_df), sigmoid(str_df))
 ```
 
-Each component is an SVM classifier's `decision_function` output passed through a sigmoid. Aggregated to `mean_mh_score` at the user-week level.
+`anx_df`, `dep_df`, `str_df` are `decision_function` outputs from three LinearSVC models passed through a sigmoid. Aggregated to mean per (user, cycle, window) at the panel level.
 
-**Validity check**: mh_score correctly ranks posts by self-reported outcome:
-- Rejected (0.451) > Waitlisted (0.446) > Accepted (0.401)
+**Validity check**: mh_score correctly ranks posts by self-reported outcome across the corpus — Rejected scores higher than Accepted.
 
 ---
 
 ### Community Breadth
 
-Number of distinct subreddits a user posted or commented in during the study window, excluding r/GradAdmissions and their own profile sub. Log-transformed (`log(1 + breadth)`) in models due to right skew.
+Number of distinct subreddits a user posted or commented in during the study window (Aug 2023–Jul 2025), excluding r/GradAdmissions and their own profile sub. Log-transformed (`log1p(breadth)`) in regression models.
 
-**Theoretical role**: proxy for social network diversity. Wider community engagement was predicted to buffer distress (stress-buffering hypothesis). This was not supported — see [Results](results.md).
+**Theoretical role (RQ2)**: proxy for social network diversity. The stress-buffering hypothesis predicts higher breadth → smaller distress response. Results in the current pipeline are inconclusive due to sample size constraints.
+
+---
+
+### Pre-Period Definition
+
+**NB06 (primary)**: Pre = August of the cycle year. Clean baseline before application season, but very sparse — only ~6.5% of panel users are active in August.
+
+**NB08 (alternative)**: Pre = Sep–Nov activity *before* each user's first anchor comment. Uses the anchor period itself as baseline, filtering to activity before treatment onset. Raises coverage to ~36.5% and increases matched pairs from ~155 to ~668 per cycle.
+
+---
+
+### Causal Impact (Bayesian Structural Time Series)
+
+Implemented in NB08 as an independent identification strategy. Aggregates exposed and unexposed users into weekly mean mh_score time series. Fits a BSTS model using the unexposed group as a synthetic control for the exposed group's counterfactual trajectory.
+
+Does not require individual pre+post coverage — all users with any weekly activity contribute. Pre-period = Sep–Nov; intervention = Dec 1; post-period = Dec–May.
+
+**Implementation note**: `causalimpact 0.2.6` is incompatible with pandas 2.x. NB08 patches `pandas.core.dtypes.common.is_datetime_or_timedelta_dtype` at runtime and passes integer index positions (not datetime objects) as pre/post period arguments to `CausalImpact()`.
+
+---
+
+### Post-Level DiD
+
+Implemented in NB06 as a complement to user-level DiD. Uses individual posts/comments as observations rather than user-period means, giving 22,355 observations vs. ~562 in the user-level analysis.
+
+Run with and without user fixed effects; SEs clustered on author. Outcomes decomposed per dimension (anxiety, depression, stress).
 
 ---
 
@@ -96,40 +124,40 @@ Number of distinct subreddits a user posted or commented in during the study win
 | | VADER | SVM (mh_score) |
 |--|-------|----------------|
 | Type | Rule-based lexicon | Trained classifier |
-| Training | Hand-crafted word list | 14,000 Reddit posts from mental health subs |
+| Training | Hand-crafted word list | ~14,000 Reddit posts from mental health subs |
 | Fires on | Any negative word | Language *patterns* of distressed writing |
 | Problem | "Don't stress about it" scores negative | — |
-| RQ1 p-value | 0.077 (not significant) | < 0.0001 |
-
-VADER is a useful first pass but lacks sensitivity for domain-specific distress language. The SVM approach follows Low et al. (2020), who used the same subreddit-as-label training strategy.
+| Sensitivity | Lower for domain-specific distress | Higher |
 
 ---
 
 ### HC3 Robust Standard Errors
 
-Standard OLS assumes constant variance in residuals (homoskedasticity). Social media data violates this — some users post much more than others. HC3 corrects for this, giving reliable p-values without requiring distributional assumptions.
+Standard OLS assumes homoskedasticity. Social media data violates this — users vary widely in posting frequency. HC3 corrects for non-constant variance, giving reliable p-values without distributional assumptions.
 
 ---
 
 ## Limitations
 
-1. **Exposure proxy**: We measure authorship, not readership. Many truly exposed users (those who read but didn't write anchor posts) are coded as unexposed. This **attenuates** the estimated effect — the true impact of reading a negative post may be larger.
+1. **Low power in NB06**: August pre-period covers only ~6.5% of panel users (~155 matched pairs/cycle), severely limiting statistical power. NB08 addresses this by redefining the pre-period.
 
-2. **Propensity score matching on observables**: Matching controls for pre-event distress and activity, but unobserved differences (personality, resilience, support networks) remain as potential confounders.
+2. **Null results**: The current v2 pipeline does not find statistically significant effects at conventional thresholds (p < 0.05) in NB06. NB08 yields borderline significance (p = 0.067 pooled). Effects are directionally consistent and in the expected direction across all specifications.
 
-3. **Text-based distress**: mh_score measures *how someone writes*, not their direct psychological state. Users may be distressed without writing distressed posts, or write distressed posts strategically (seeking support or validation).
+3. **Exposure proxy**: "Exposed" means *commented on* an anchor thread, not merely *read* it. Many truly exposed users (who read but didn't comment) are classified as unexposed, attenuating the estimated effect.
 
-4. **Community breadth amplification (RQ2)**: The positive moderation coefficient is unexpected. Community breadth as a measure of social support is crude — it counts subreddits without regard for their relevance, quality, or reciprocity. A user active in r/gaming and r/cooking has "high breadth" but no relevant support for admissions anxiety.
+4. **PSM on observables only**: Matching controls for pre-period distress and activity, but unobserved differences (personality, resilience, offline support networks) remain as potential confounders.
 
-5. **Reddit-specific generalizability**: r/GradAdmissions is a self-selected community of applicants willing to post publicly. Results may not generalize to all graduate school applicants.
+5. **Text-based distress proxy**: mh_score measures how someone writes, not their psychological state directly. Users may be distressed without writing distressed posts, or write distressed-sounding posts strategically.
 
-6. **Data leakage prevention**: SVM training data (Jan 2022 – Jul 2023) predates the study window (Aug 2023 – Jul 2025) to avoid contamination.
+6. **Community breadth as social support proxy**: counting distinct subreddits is crude — belonging to r/gaming and r/cooking does not provide admissions-relevant social support.
+
+7. **Reddit-specific generalizability**: r/GradAdmissions is a self-selected community of applicants willing to post publicly.
 
 ---
 
 ## References
 
 - Low, D.M., et al. (2020). Natural language processing reveals vulnerable mental health support patterns in a COVID-19 crisis forum. *JMIR Mental Health*, 7(6), e21236.
+- Brodersen, K.H., et al. (2015). Inferring causal impact using Bayesian structural time-series models. *Annals of Applied Statistics*, 9(1), 247–274.
 - Hutto, C.J. & Gilbert, E.E. (2014). VADER: A parsimonious rule-based model for sentiment analysis of social media text. *ICWSM*.
-- Joachims, T. (1998). Text categorization with support vector machines. *ECML*.
 - MacKinnon, J.G. & White, H. (1985). Some heteroskedasticity-consistent covariance matrix estimators. *Journal of Econometrics*, 29(3), 305–325.

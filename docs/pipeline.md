@@ -10,10 +10,16 @@ For running instructions, see [Quickstart](quickstart.md).
 
 **Source**: r/GradAdmissions Reddit posts and comments, Aug 2023 – Jul 2025.
 
-| File | Size | Description |
-|------|------|-------------|
-| `data/raw/r_gradadmissions_posts.jsonl` | 286 MB | Raw post dumps from Pushshift/Arctic Shift |
-| `data/raw/r_gradadmissions_comments.jsonl` | 847 MB | Raw comment dumps |
+Raw files live at the **repository root** (not in `data/raw/`):
+
+| File | Description |
+|------|-------------|
+| `r_gradadmissions_posts.jsonl` | Raw post dumps |
+| `r_gradadmissions_comments.jsonl` | Raw comment dumps |
+| `r_gradadmissions_posts.cleaned.jsonl` | Pre-cleaned posts (original pipeline) |
+| `r_gradadmissions_comments.cleaned.jsonl` | Pre-cleaned comments (original pipeline) |
+
+All intermediate outputs go to `data/processed_v2/`.
 
 ---
 
@@ -21,19 +27,32 @@ For running instructions, see [Quickstart](quickstart.md).
 
 ```
 01 → 02 → 03 → 04 → 05 → 06
+                          └→ 08 (alternative analysis, independent of 06)
+00 (EDA only, no downstream deps)
+07 (optional VADER baseline, uses old processed/ outputs)
 ```
 
 | Notebook | File | Depends on |
 |----------|------|------------|
-| 01 | `01_clean_corpus.ipynb` | Raw data only |
+| 00 | `00_exploratory_topic_sentiment.ipynb` | Raw data (EDA only) |
+| 01 | `01_clean_corpus.ipynb` | Raw JSONL files |
 | 02 | `02_train_classifiers.ipynb` | Arctic Shift API (training data) |
 | 03 | `03_exposure_labels_v2.ipynb` | 01, 02 |
 | 04 | `04_panel_scores.ipynb` | 01, 02, 03 |
 | 05 | `05_collect_community_breadth.ipynb` | 04 |
 | 06 | `06_did_analysis_v2.ipynb` | 04, 05 |
-| 07 | `07_did_analysis_vader_baseline.ipynb` | Optional — uses old pipeline outputs |
+| 07 | `07_did_analysis_vader_baseline.ipynb` | Old `data/processed/` outputs |
+| 08 | `08_alt_analysis.ipynb` | Raw JSONL, 03, 02 models |
 
 Notebooks 01 and 02 have no dependency on each other and can run in parallel.
+
+---
+
+## Notebook 00 — Exploratory EDA
+
+**File**: `notebooks/00_exploratory_topic_sentiment.ipynb`
+
+Exploratory analysis only. Produces visualizations of post volume, VADER sentiment distribution, and topic patterns. No outputs consumed by downstream notebooks.
 
 ---
 
@@ -41,26 +60,25 @@ Notebooks 01 and 02 have no dependency on each other and can run in parallel.
 
 **File**: `notebooks/01_clean_corpus.ipynb`
 
-Reads the raw JSONL dumps and produces clean, canonical JSONL files used by all downstream notebooks. No scoring happens here.
+Reads the raw JSONL dumps and produces clean, canonical JSONL files used by all downstream notebooks (03, 04).
 
-**Cleaning steps:**
+**Cleaning steps**:
 
 | Step | What it does |
 |------|-------------|
-| Date/author validation | Parses `created_utc` (Unix timestamp → ISO datetime), drops null/deleted/removed authors and bodies |
+| Date/author validation | Parses `created_utc` → ISO datetime, drops null/deleted/removed/bot authors |
 | Dedup | Deduplicates on `id`, keeps first occurrence |
-| Bot filtering | Drops `AutoModerator` and any author matching `*bot` pattern |
 | Text normalization | Lowercase → strip URLs → strip non-alpha → collapse whitespace → `clean_text` field |
-| Comment→post mapping | Derives `post_id = link_id.removeprefix("t3_")` on comments — links each comment to its parent post thread |
+| Comment→post mapping | Derives `post_id = link_id.removeprefix("t3_")` on comments — links each comment to its parent thread |
 
-The comment→post mapping was missing from the old pipeline. Without it, exposure identification had to rely on same-week activity as a proxy; now comments are directly linked to the anchor threads they came from.
+The `post_id` field on comments is critical: it enables thread-level exposure identification in NB03.
 
-**Outputs**:
+**Outputs** → `data/processed_v2/`:
 
-| File | Description |
-|------|-------------|
-| `data/processed_v2/posts_clean.jsonl` | `id, author, created_dt, clean_text, score, num_comments` |
-| `data/processed_v2/comments_clean.jsonl` | `id, author, created_dt, post_id, clean_text, score` |
+| File | Schema |
+|------|--------|
+| `posts_clean.jsonl` | `id, author, created_dt, clean_text, score, num_comments` |
+| `comments_clean.jsonl` | `id, author, created_dt, post_id, clean_text, score` |
 
 ---
 
@@ -68,11 +86,11 @@ The comment→post mapping was missing from the old pipeline. Without it, exposu
 
 **File**: `notebooks/02_train_classifiers.ipynb`
 
-Trains three binary SVM classifiers following Low et al. (2020), using posts from mental health subreddits as the positive class and general-topic subreddits as the negative class.
+Trains three binary SVM classifiers following Low et al. (2020), using posts from mental health subreddits as the positive class.
 
-**Why SVM over VADER?** VADER fires on any negative word regardless of context — "rejected" scores negative whether someone is venting distress or asking about acceptance rates. The SVMs learn the *style* of distressed writing from actual mental health communities.
+**Why SVM over VADER?** VADER fires on any negative word regardless of context — "rejected, what are my chances?" scores as distressed. The SVMs learn the *style* of distressed writing (self-referential framing, help-seeking language) from actual mental health communities.
 
-**Training data** (Jan 2022 – Jul 2023, before the study window to prevent leakage):
+**Training data** (Jan 2022 – Jul 2023, before study window to prevent leakage):
 
 | Classifier | Positive class | Negative (control) |
 |------------|---------------|-------------------|
@@ -80,17 +98,17 @@ Trains three binary SVM classifiers following Low et al. (2020), using posts fro
 | depression | r/depression — 2,000 posts | same |
 | stress | r/stress — 2,000 posts | same |
 
-**Features**: TF-IDF on unigrams + bigrams, max 50k features. Validated via 5-fold CV (F1: 0.88–0.94).
+**Features**: TF-IDF unigrams + bigrams, max 50k features. 5-fold CV F1: 0.88–0.94.
 
-**Composite score**: `mean_mh_score = mean(anx_score, dep_score, str_score)` — continuous ∈ (0, 1), higher = more distress language.
+**Composite score**: `mh_score = mean(sigmoid(anx_df), sigmoid(dep_df), sigmoid(str_df))` ∈ (0, 1).
 
-**Outputs**:
+**Outputs** → `models/`:
 
 | File | Description |
 |------|-------------|
-| `models/clf_anxiety.joblib` | Fitted Pipeline (TF-IDF + LinearSVC) |
-| `models/clf_depression.joblib` | — |
-| `models/clf_stress.joblib` | — |
+| `clf_anxiety.joblib` | Fitted Pipeline (TF-IDF + LinearSVC) |
+| `clf_depression.joblib` | — |
+| `clf_stress.joblib` | — |
 
 ---
 
@@ -98,15 +116,15 @@ Trains three binary SVM classifiers following Low et al. (2020), using posts fro
 
 **File**: `notebooks/03_exposure_labels_v2.ipynb`
 
-Identifies anchor posts and classifies panel users as exposed or unexposed using correct thread-level linking via `post_id` / `link_id`.
+Identifies anchor posts and classifies panel users as exposed or unexposed using thread-level linking via `post_id` / `link_id`.
 
 **Anchor post definition** (post must meet all three):
-1. Falls within the anchor period: Sep 1–Nov 30 of a cycle year
-2. Matches negative keyword list (rejection, re-applicant, anxiety, stress, depression...)
-3. `mean_mh_score > 0.45` from the three SVM classifiers (notebook 02)
+1. Falls within the anchor period: Sep 1–Nov 30 of the cycle year
+2. Matches negative keyword list (rejection, re-applicant, anxiety, stress, depression…)
+3. `mh_score > 0.45` from the three SVM classifiers
 
 **Exposure classification**:
-- **Exposed**: user commented on an anchor post thread (identified via `link_id`); anchor post authors are excluded
+- **Exposed**: user commented on an anchor post thread (matched via `link_id`); anchor post authors are excluded
 - **Unexposed**: active in r/GradAdmissions during Aug 1–May 31 of that cycle but never commented on an anchor thread
 
 **Cycle windows**:
@@ -116,20 +134,20 @@ Identifies anchor posts and classifies panel users as exposed or unexposed using
 | Anchor period | Sep 1–Nov 30, 2023 | Sep 1–Nov 30, 2024 |
 | Active window | Aug 1, 2023–May 31, 2024 | Aug 1, 2024–May 31, 2025 |
 
-**Outputs**:
+**Outputs** → `data/processed_v2/`:
 
 | File | Description |
 |------|-------------|
-| `data/processed_v2/anchor_posts_v2.parquet` | Anchor posts with SVM scores |
-| `data/processed_v2/exposure_labels_v2.parquet` | `author, exposed (bool), cycle` |
+| `anchor_posts_v2.parquet` | Anchor posts with SVM scores; columns include `id, cycle` |
+| `exposure_labels_v2.parquet` | `author, exposed (bool), cycle` |
 
 ---
 
-## Notebook 04 — Panel Scoring (Pre / Post Windows)
+## Notebook 04 — Panel Scoring
 
 **File**: `notebooks/04_panel_scores.ipynb`
 
-Scores each panel user's text in the **pre-baseline** (August) and **post-outcome** (December–May) windows using the SVM classifiers, then merges with exposure labels to build the analysis panel.
+Scores each panel user's text in the **pre-baseline** (August) and **post-outcome** (December–May) windows, then builds the analysis panel. Also produces post-level scores for the post-level DiD in NB06.
 
 **Scoring windows**:
 
@@ -138,23 +156,13 @@ Scores each panel user's text in the **pre-baseline** (August) and **post-outcom
 | Pre baseline | Aug 1–31, 2023 | Aug 1–31, 2024 |
 | Post outcome | Dec 1, 2023–May 31, 2024 | Dec 1, 2024–May 31, 2025 |
 
-**Steps**:
-1. Load panel users from `exposure_labels_v2.parquet`
-2. Filter clean JSONL to Aug windows → score with 3 SVMs → aggregate `pre_mh_score`, `pre_n_posts`
-3. Filter clean JSONL to Dec–May windows → score → aggregate `post_mh_score`, `post_n_posts`
-4. Inner join pre + post + exposure labels; drop users missing either window
+**Outputs** → `data/processed_v2/`:
 
-**Output**: `data/processed_v2/panel_scores_v2.parquet`
-
-| Column | Description |
-|--------|-------------|
-| `author` | Reddit username |
-| `cycle` | 1 or 2 |
-| `exposed` | bool |
-| `pre_mh_score` | Mean SVM score across Aug posts/comments |
-| `pre_n_posts` | Count of Aug posts/comments |
-| `post_mh_score` | Mean SVM score across Dec–May posts/comments |
-| `post_n_posts` | Count of Dec–May posts/comments |
+| File | Schema | Description |
+|------|--------|-------------|
+| `panel_scores_v2.parquet` | `author, cycle, exposed, pre_mh_score, pre_n_posts, post_mh_score, post_n_posts` | User-level pre/post scores |
+| `post_level_scores_v2.parquet` | `author, cycle, exposed, period, mh_score, anx, dep, str_, dt` | One row per post/comment for post-level DiD |
+| `dose_exposure_v2.parquet` | `author, cycle, n_anchor_comments` | Anchor comment count per user (for dose-response) |
 
 ---
 
@@ -162,59 +170,57 @@ Scores each panel user's text in the **pre-baseline** (August) and **post-outcom
 
 **File**: `notebooks/05_collect_community_breadth.ipynb`
 
-Queries the [Arctic Shift API](https://arctic-shift.photon-reddit.com) for each v2 panel user's activity across all of Reddit during the study window.
+Queries the Arctic Shift API for each v2 panel user's cross-subreddit activity.
 
-**Community breadth** = number of distinct subreddits a user posted or commented in (excluding r/GradAdmissions and their own profile sub).
+**Community breadth** = number of distinct subreddits a user posted/commented in (excluding r/GradAdmissions and their own profile sub).
 
-**Strategy**: Reuses the existing `data/processed/user_community_breadth.parquet` (25,305 users from the old pipeline) as a cache. Only fetches Arctic Shift for users in the new v2 panel not already covered.
+**Strategy**: Reuses any existing cache from the old pipeline. Only fetches Arctic Shift for users in the v2 panel not already covered.
 
-**API endpoint**: `GET /api/users/interactions/subreddits?author={user}&after=2023-08-01&before=2025-07-31`
+**Fault tolerance**: Progress saved to `data/processed_v2/breadth_checkpoint_v2.jsonl` every 500 users.
 
-**Fault tolerance**: Progress is saved to `data/processed_v2/breadth_checkpoint_v2.jsonl` every 500 users. Safe to interrupt and resume.
-
-**Output**: `data/processed_v2/user_community_breadth_v2.parquet`
+**Output** → `data/processed_v2/user_community_breadth_v2.parquet`:
 
 | Column | Description |
 |--------|-------------|
 | `author` | Reddit username |
-| `community_breadth` | # distinct subreddits (int) |
+| `community_breadth` | # distinct subreddits |
 | `community_breadth_log` | `log1p(breadth)` — used in regression |
-| `subreddits_json` | JSON list of subreddit names |
-| `status` | `ok` / `timeout` / `http_4xx` |
 
 ---
 
-## Notebook 06 — PSM + DiD Analysis
+## Notebook 06 — Main Analysis (PSM + DiD)
 
 **File**: `notebooks/06_did_analysis_v2.ipynb`
 
-The main results notebook. Runs propensity-score matching and difference-in-differences regression using `mean_mh_score` as the outcome.
+The primary results notebook. Runs PSM, user-level DiD, post-level DiD, and dose-response analysis.
 
 **Steps**:
 
-1. **PSM per cycle**: 1:1 nearest-neighbor matching on `pre_mh_score` + `pre_n_posts` (+ `community_breadth_log` if coverage ≥ 95%), caliper = 0.05. Balance assessed via standardised mean differences (SMD < 0.1).
+1. **PSM per cycle**: 1:1 nearest-neighbor matching on propensity score from logistic regression on `pre_mh_score + log1p_n_posts_pre` (+ `community_breadth_log` if ≥ 95% coverage). Caliper = 0.05. SMD balance checks printed per feature.
 
-2. **Reshape to long**: one row per user × period (0 = pre, 1 = post).
-
-3. **RQ1 — Main DiD**:
+2. **User-level DiD** (long format, one row per user × period):
    ```
-   mh_score ~ period + exposed + period×exposed + log1p(n_posts)
+   mh_score ~ period + exposed + period×exposed + log1p_posts
    ```
-   OLS with HC3 robust standard errors. Run for Cycle 1, Cycle 2, and pooled (+ cycle FE).
+   OLS with HC3 robust SEs. Run per cycle and pooled (+ cycle FE).
 
-4. **RQ2 — Community breadth moderation**:
-   ```
-   mh_score ~ period + exposed + community_breadth_log
-            + period×exposed + period×breadth + exposed×breadth
-            + period×exposed×breadth + log1p(n_posts)
-   ```
-   Three-way interaction coefficient = moderating effect of breadth.
+3. **Post-level DiD** (22,355 observations): same specification but one row per individual post, with and without user fixed effects. Cluster SEs on author. Also decomposed per dimension (anxiety, depression, stress).
 
-5. **Parallel trends check**: plot pre/post mean mh_score by exposure for the matched sample.
+4. **Dose-response analysis**: uses `dose_exposure_v2.parquet` to test whether effect scales with number of anchor comments seen.
 
-6. **Figures**: ATT coefficient plot, parallel trends plot, regression table → `figures/`.
+5. **RQ2 — Community breadth moderation**: three-way interaction `period × exposed × breadth_log`.
 
-See [Results](results.md) for the output.
+**Key results** (current pipeline):
+
+| Specification | DiD estimate | p-value |
+|--------------|-------------|---------|
+| Cycle 1 user-level | +0.0069 | 0.476 n.s. |
+| Cycle 2 user-level | +0.0102 | 0.226 n.s. |
+| Pooled + cycle FE | +0.0080 | 0.207 n.s. |
+| Post-level pooled (no FE) | −0.0008 | 0.858 n.s. |
+| Post-level pooled (+user FE) | +0.0038 | 0.343 n.s. |
+
+Effects are directionally positive but not statistically significant. PSM yields ~155 matched pairs per cycle (low power due to August pre-period coverage of ~6.5%).
 
 ---
 
@@ -222,6 +228,41 @@ See [Results](results.md) for the output.
 
 **File**: `notebooks/07_did_analysis_vader_baseline.ipynb`
 
-Runs the DiD pipeline using VADER `distress_score` as the outcome instead of SVM `mh_score`. Useful as a robustness check — if the SVM and VADER results point in the same direction, the finding is not an artefact of the measurement choice.
+Runs the DiD pipeline using VADER `distress_score` as the outcome. Uses older `data/processed/` outputs. Kept for comparison purposes; not part of the main pipeline.
 
-> Note: This notebook uses old pipeline outputs from `data/processed/` and the ±2-week event-study design. It is kept for comparison purposes only. The main results are in notebook 06.
+---
+
+## Notebook 08 — Alternative Analysis: Sep–Nov Pre-Period + Causal Impact
+
+**File**: `notebooks/08_alt_analysis.ipynb`
+
+Addresses the power problem in NB06 (only 6.5% user coverage with August pre-period) using two complementary approaches.
+
+**Inputs**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (raw, at repo root), plus `exposure_labels_v2.parquet`, `anchor_posts_v2.parquet`, `user_community_breadth_v2.parquet`, and the three SVM models.
+
+**Approach 1 — Redefined pre-period**:
+- Pre = each user's Sep–Nov activity *before* their first anchor comment (exposed users) or full Sep–Nov (unexposed)
+- Post = Dec 1–May 31 (same as NB06)
+- Coverage: 36.5% of panel users (vs. 6.5%), ~668 matched pairs/cycle
+
+**Approach 2 — Causal Impact** (Bayesian structural time series):
+- Aggregates exposed vs. unexposed weekly mean mh_score into a wide time series
+- Uses unexposed group as synthetic control via Google's `causalimpact` library
+- Pre-period: Sep 1–Nov 30; post-period: Dec 1–May 31
+- Does not require individual pre+post coverage
+
+**Key results**:
+
+| Method | Cycle | Estimate | p-value |
+|--------|-------|---------|---------|
+| DiD | 1 | +0.0058 | 0.365 n.s. |
+| DiD | 2 | +0.0090 | 0.104 n.s. |
+| DiD | Pooled | +0.0076 | 0.067 (borderline) |
+| CausalImpact | 1 | +2.1% relative | — |
+| CausalImpact | 2 | +2.7% relative | — |
+
+Both methods show directionally consistent positive effects.
+
+**Note**: `causalimpact 0.2.6` is incompatible with pandas 2.x; the notebook patches `pandas.core.dtypes.common.is_datetime_or_timedelta_dtype` at runtime and uses integer index positions for pre/post period arguments.
+
+**Output** → `data/processed_v2/panel_scores_alt.parquet`
