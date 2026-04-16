@@ -1,0 +1,20 @@
+Spec,Subset,Coef,p-val,95% CI
+Binary DiD,Cycle 1,+0.0053n.s.,0.3229,"[-0.0053, +0.0159]"
+Binary DiD,Cycle 2,+0.0069n.s.,0.1783,"[-0.0032, +0.0170]"
+Binary DiD,Pooled,+0.0063n.s.,0.0897,"[-0.0010, +0.0137]"
+Intensity DiD,Cycle 1,+0.0013n.s.,0.5073,"[-0.0026, +0.0053]"
+Intensity DiD,Cycle 2,+0.0019n.s.,0.3234,"[-0.0018, +0.0056]"
+Intensity DiD,Pooled,+0.0017n.s.,0.2309,"[-0.0011, +0.0044]"
+Exposure-Prob DiD,Cycle 1,+0.0046n.s.,0.6316,"[-0.0143, +0.0236]"
+Exposure-Prob DiD,Cycle 2,+0.0091n.s.,0.2209,"[-0.0055, +0.0237]"
+Exposure-Prob DiD,Pooled,+0.0068n.s.,0.2450,"[-0.0047, +0.0184]"
+GPS WLS,Cycle 1,-0.0111n.s.,0.4946,"[-0.0430, +0.0208]"
+GPS WLS,Cycle 2,+0.0060n.s.,0.6090,"[-0.0169, +0.0289]"
+GPS WLS,Pooled,-0.0020n.s.,0.8290,"[-0.0204, +0.0164]"
+Per-dim (mh_score),Pooled,+0.0063n.s.,0.0897,"[-0.0010, +0.0137]"
+Per-dim (anx_score),Pooled,+0.0061n.s.,0.1168,"[-0.0015, +0.0138]"
+Per-dim (dep_score),Pooled,+0.0078n.s.,0.0670,"[-0.0005, +0.0161]"
+Per-dim (str_score),Pooled,+0.0051n.s.,0.1928,"[-0.0026, +0.0128]"
+RQ2 Breadth Mod,Cycle 1,—,—,—
+RQ2 Breadth Mod,Cycle 2,—,—,—
+RQ2 Breadth Mod,Pooled,—,—,—
