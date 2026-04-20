@@ -2,13 +2,13 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-07
+**Last updated**: 2026-04-16
 
 ---
 
 ## Project in One Paragraph
 
-Causal inference study on r/GradAdmissions (Aug 2023–Jul 2025). RQ1: does exposure to high-distress anchor posts increase users' mental health distress scores in the following Dec–May decision season? RQ2: does cross-Reddit community breadth moderate this effect? Method: SVM-based distress scoring → anchor post identification → propensity-score matched DiD. Current results: small positive effects (~+0.007–0.010) that are directionally consistent but not statistically significant at p < 0.05 in the primary analysis (NB06). Alternative analysis (NB08) with Sep–Nov pre-period yields borderline pooled DiD p = 0.067 and CausalImpact +2.1–2.7%.
+Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025). RQ1: does exposure to high-distress anchor posts increase users' mental health distress scores in the following Dec–May decision season? RQ2: does cross-Reddit community breadth moderate this effect? Method: SVM-based distress scoring → anchor post identification → propensity-score matched DiD. The pipeline is parameterized by `SUBREDDIT` (set at top of each notebook). Current results (r/GradAdmissions): small positive effects (~+0.007–0.010) that are directionally consistent but not statistically significant at p < 0.05 in the primary analysis (NB06). Alternative analysis (NB08) with Sep–Nov pre-period yields borderline pooled DiD p = 0.067 and CausalImpact +2.1–2.7%. r/MSCS pipeline outputs are pending execution.
 
 ---
 
@@ -24,21 +24,35 @@ Causal inference study on r/GradAdmissions (Aug 2023–Jul 2025). RQ1: does expo
 
 ```
 /                                        ← repo root
-├── r_gradadmissions_posts.jsonl         ← NOT in git — raw posts
-├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments
+├── r_gradadmissions_posts.jsonl         ← NOT in git — raw posts (GradAdmissions)
+├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments (GradAdmissions)
 ├── r_gradadmissions_posts.cleaned.jsonl ← NOT in git — pre-cleaned (old pipeline)
 ├── r_gradadmissions_comments.cleaned.jsonl ← NOT in git
 ├── notebooks/
 │   ├── 00_exploratory_topic_sentiment.ipynb  (EDA only)
-│   ├── 01_clean_corpus.ipynb
+│   ├── 01_clean_corpus.ipynb             ← SUBREDDIT config at top
 │   ├── 02_train_classifiers.ipynb
-│   ├── 03_exposure_labels_v2.ipynb
-│   ├── 04_panel_scores.ipynb
-│   ├── 05_collect_community_breadth.ipynb
-│   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS
-│   ├── 07_did_analysis_vader_baseline.ipynb  (optional, uses old data/processed/)
-│   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact
-├── data/processed_v2/                    ← all intermediate outputs (in git where small)
+│   ├── 03_exposure_labels_v2.ipynb       ← SUBREDDIT config at top
+│   ├── 04_panel_scores.ipynb             ← SUBREDDIT config at top
+│   ├── 05_collect_community_breadth.ipynb ← SUBREDDIT config at top
+│   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
+│   ├── 07_comparison_analysis.ipynb      ← Cross-subreddit comparison (NEW)
+│   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
+├── data/
+│   ├── raw/
+│   │   ├── r_MSCS_posts.jsonl            ← NOT in git — raw MSCS posts
+│   │   └── r_MSCS_comments.jsonl         ← NOT in git — raw MSCS comments
+│   └── processed_v2/
+│       ├── gradadmissions/               ← all GradAdmissions pipeline outputs
+│       │   ├── anchor_posts_v2.parquet
+│       │   ├── exposure_labels_v2.parquet
+│       │   ├── panel_scores_v2.parquet
+│       │   ├── post_level_scores_v2.parquet
+│       │   ├── dose_exposure_v2.parquet
+│       │   ├── panel_scores_alt.parquet
+│       │   └── user_community_breadth_v2.parquet
+│       ├── mscs/                         ← MSCS pipeline outputs (pending execution)
+│       └── comparison_summary.parquet    ← NB07 output (all key metrics)
 ├── models/                               ← clf_anxiety/depression/stress.joblib
 ├── figures/                              ← all PNG outputs
 └── docs/
@@ -78,7 +92,9 @@ Causal inference study on r/GradAdmissions (Aug 2023–Jul 2025). RQ1: does expo
 
 > Note: cleaned files use `created_dt` (string) and `clean_text`, NOT `created_utc` and `selftext`/`body`. Do not confuse with raw fields.
 
-### Parquet Files (`data/processed_v2/`)
+### Parquet Files (`data/processed_v2/gradadmissions/` or `data/processed_v2/mscs/`)
+
+> All parquet outputs are now in subreddit-specific subdirectories. `SUBREDDIT` at top of each notebook controls which dir is used.
 
 **`exposure_labels_v2.parquet`** — 21,730 rows, 20,932 unique authors
 | Column | Type | Notes |
@@ -278,11 +294,14 @@ def assign_window(author, dt, cycle):
 
 | Figure | Produced by | Description |
 |--------|-------------|-------------|
-| `fig_att_coef_v2.png` | NB06 | ATT coefficient plot (user-level DiD per cycle + pooled) |
-| `fig_parallel_trends_v2.png` | NB06 | Pre/post mean mh_score — August pre-period matched panel |
-| `fig_parallel_trends_alt.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
-| `fig_causal_impact_cycle1.png` | NB08 | CausalImpact BSTS output — Cycle 1 |
-| `fig_causal_impact_cycle2.png` | NB08 | CausalImpact BSTS output — Cycle 2 |
+| `fig_att_coef_{SUBREDDIT}.png` | NB06 | ATT coefficient plot (user-level DiD per cycle + pooled) |
+| `fig_parallel_trends_{SUBREDDIT}.png` | NB06 | Pre/post mean mh_score — August pre-period matched panel |
+| `fig_parallel_trends_alt_{SUBREDDIT}.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
+| `fig_causal_impact_cycle1_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — Cycle 1 |
+| `fig_causal_impact_cycle2_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — Cycle 2 |
+| `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for both subreddits side by side |
+| `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: GradAdmissions vs MSCS |
+| `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: GradAdmissions vs MSCS |
 | `fig_event_study_v2.png` | old pipeline | Event study with SVM mh_score (±2 weeks) |
 | `fig_event_study_clean.png` | old pipeline | Event study with 95% CI (clean version) |
 | `fig_event_study.png` | old pipeline | Event study with VADER distress |
@@ -370,6 +389,19 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `5d371355` | dose-response analysis |
 | `e27bc930` | placebo test |
 
+### NB07 `07_comparison_analysis.ipynb`
+| cell_id | Content |
+|---------|---------|
+| `c7000002` | imports + paths — loads from both subreddit subdirs |
+| `c7000004` | panel and anchor post summary per subreddit per cycle |
+| `c7000006` | anchor post characteristics comparison (boxplots) |
+| `c7000008` | PSM + DiD helper functions (psm_match, build_long_df, run_did) |
+| `c7000010` | run PSM + DiD for both subreddits |
+| `c7000012` | ATT coefficient comparison forest plot |
+| `c7000014` | pre/post mh_score distribution boxplots |
+| `c7000016` | Z-test: difference in ATT between subreddits |
+| `c7000018` | summary table + save comparison_summary.parquet |
+
 ### NB08 `08_alt_analysis.ipynb`
 | cell_id | Content |
 |---------|---------|
@@ -403,6 +435,8 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 ---
 
 ## Known Gotchas
+
+0. **SUBREDDIT config variable**: NB01, NB03, NB04, NB05, NB06, NB08 all have `SUBREDDIT = 'gradadmissions'` at the top of their first code cell. Change this to `'mscs'` to run the MSCS pipeline. All output paths automatically route to `data/processed_v2/{SUBREDDIT}/`.
 
 1. **Raw vs cleaned field names**:
    - Raw: `created_utc` (int), `selftext` / `body`, `link_id` = `"t3_<id>"`
@@ -446,19 +480,46 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 **In git**: all `*.parquet`, `models/clf_*.joblib`, `figures/*.png`, all notebooks, all docs.
 
 **NOT in git** (too large or regenerable):
-- `r_gradadmissions_posts.jsonl` / `r_gradadmissions_comments.jsonl` (raw)
+- `r_gradadmissions_posts.jsonl` / `r_gradadmissions_comments.jsonl` (raw, repo root)
+- `data/raw/r_MSCS_posts.jsonl` / `data/raw/r_MSCS_comments.jsonl` (raw, data/raw/)
 - `r_gradadmissions_*.cleaned.jsonl` (pre-cleaned, old pipeline)
-- `data/processed_v2/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01)
+- `data/processed_v2/gradadmissions/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01)
+- `data/processed_v2/mscs/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01 with SUBREDDIT='mscs')
 
 ---
 
 ## Current Status & Open Issues
 
-- **NB01–NB06**: complete and producing outputs.
-- **NB08**: fixed 2026-04-07 (wrong POSTS_PATH/COMMENTS_PATH). Now uses `r_gradadmissions_*.jsonl` at repo root. `causalimpact` installed.
+- **NB01–NB08 (r/GradAdmissions)**: complete and producing outputs.
+- **NB01–NB08 (r/MSCS)**: pipeline parameterized and ready — must be executed by setting `SUBREDDIT='mscs'` in each notebook and running NB01→NB06→NB08 in order. NB05 (breadth) will fetch all users from API (no cache for MSCS).
+- **NB07 (comparison)**: new notebook — runs after both subreddit pipelines complete. Loads parquets from both subdirs and produces comparison figures + `comparison_summary.parquet`.
+- **NB08**: fixed 2026-04-07 (wrong POSTS_PATH/COMMENTS_PATH). Now parameterized — uses `r_gradadmissions_*.jsonl` at repo root or `data/raw/r_MSCS_*.jsonl` depending on SUBREDDIT.
 - **Primary power problem**: NB06 has ~155 matched pairs/cycle (August pre-period). NB08 has ~668. Consider making NB08 the primary analysis.
 - **Breadth moderation (RQ2)**: inconclusive due to low breadth coverage (1,689/20,932 users). Results vary by specification.
 - **Null results in NB06**: all p > 0.20. Likely underpowered, not absence of effect.
+
+## Running the Pipeline
+
+### Single command (both subreddits)
+```bash
+~/venvs/jupyter/bin/python3 run_pipeline.py
+```
+Runs NB01 → NB03 → NB04 → NB05 → NB06 → NB08 for each subreddit in sequence, then NB07 comparison.
+
+### Options
+```bash
+# One subreddit only
+~/venvs/jupyter/bin/python3 run_pipeline.py --subreddits gradadmissions
+
+# Resume from a specific step (skips earlier notebooks)
+~/venvs/jupyter/bin/python3 run_pipeline.py --start-from 04
+
+# Skip the comparison notebook
+~/venvs/jupyter/bin/python3 run_pipeline.py --skip-comparison
+```
+
+### How it works
+`run_pipeline.py` injects the correct `SUBREDDIT` value into each notebook's config cell, executes via `nbconvert`, and writes output to a temp directory (source notebooks are never modified). All data outputs land in `data/processed_v2/{subreddit}/`.
 
 ---
 
