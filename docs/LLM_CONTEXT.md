@@ -2,13 +2,21 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-16
+**Last updated**: 2026-04-21 (3-cycle update — 2022 admission cycle added for all three subreddits)
 
 ---
 
 ## Project in One Paragraph
 
-Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025). RQ1: does exposure to high-distress anchor posts increase users' mental health distress scores in the following Dec–May decision season? RQ2: does cross-Reddit community breadth moderate this effect? Method: SVM-based distress scoring → anchor post identification → propensity-score matched DiD. The pipeline is parameterized by `SUBREDDIT` (set at top of each notebook). Current results (r/GradAdmissions): small positive effects (~+0.007–0.010) that are directionally consistent but not statistically significant at p < 0.05 in the primary analysis (NB06). Alternative analysis (NB08) with Sep–Nov pre-period yields borderline pooled DiD p = 0.067 and CausalImpact +2.1–2.7%. r/MSCS pipeline outputs are pending execution.
+Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three subreddits now cover **Aug 2022–Jul 2025 (three admission cycles)**. RQ1: does exposure to high-distress anchor posts increase users' mental health distress scores in the following Dec–May decision season? RQ2: does cross-Reddit community breadth moderate this effect? Method: SVM-based distress scoring → anchor post identification → propensity-score matched DiD. The pipeline is parameterized by `SUBREDDIT` (set at top of each notebook). Orchestrated via `run_pipeline.py`.
+
+**Cycle numbering (chronological):** `cycle=1` → 2022 cycle (anchor Sep–Nov 2022, post Dec 2022–May 2023). `cycle=2` → 2023 cycle. `cycle=3` → 2024 cycle. NB06/NB07/NB08 now derive the cycle list dynamically from each panel (no hardcoded `[1, 2]`).
+
+**Headline results (NB07, 2026-04-21 — from the earlier 2-cycle run; re-run pipeline to refresh with 3 cycles)**:
+- **r/MBA pooled DiD = +0.0081, 95% CI [+0.0024, +0.0138], p = 0.0054** (significant at p < 0.01). Cycle 1 also significant in the 2-cycle run: +0.0088, p = 0.0205.
+- **r/GradAdmissions pooled DiD = +0.0043, CI [-0.0030, +0.0115], p = 0.25** (not significant).
+- **r/MSCS pooled DiD = +0.0062, CI [-0.0063, +0.0188], p = 0.33** (not significant). Cycle 2 marginal: +0.0133, p = 0.096.
+- All three subreddits show positive point estimates; only r/MBA crosses statistical significance. r/MBA has the largest matched panel (1,425 pairs pooled vs 928 for GA, 191 for MSCS).
 
 ---
 
@@ -24,10 +32,9 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 
 ```
 /                                        ← repo root
-├── r_gradadmissions_posts.jsonl         ← NOT in git — raw posts (GradAdmissions)
-├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments (GradAdmissions)
-├── r_gradadmissions_posts.cleaned.jsonl ← NOT in git — pre-cleaned (old pipeline)
-├── r_gradadmissions_comments.cleaned.jsonl ← NOT in git
+├── r_gradadmissions_posts.jsonl         ← NOT in git — raw posts (GA, 2023 + 2024 cycles)
+├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments (GA, 2023 + 2024 cycles)
+├── run_pipeline.py                      ← orchestrator: injects SUBREDDIT, runs NB01→NB08+NB07
 ├── notebooks/
 │   ├── 00_exploratory_topic_sentiment.ipynb  (EDA only)
 │   ├── 01_clean_corpus.ipynb             ← SUBREDDIT config at top
@@ -36,14 +43,21 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 │   ├── 04_panel_scores.ipynb             ← SUBREDDIT config at top
 │   ├── 05_collect_community_breadth.ipynb ← SUBREDDIT config at top
 │   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
-│   ├── 07_comparison_analysis.ipynb      ← Cross-subreddit comparison (NEW)
+│   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
 │   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
 ├── data/
 │   ├── raw/
-│   │   ├── r_MSCS_posts.jsonl            ← NOT in git — raw MSCS posts
-│   │   └── r_MSCS_comments.jsonl         ← NOT in git — raw MSCS comments
+│   │   ├── r_gradadmissions_2022_posts.jsonl    ← NOT in git — GA 2022 cycle posts (Aug'22–Jul'23)
+│   │   ├── r_gradadmissions_2022_comments.jsonl ← NOT in git — GA 2022 cycle comments
+│   │   ├── r_MSCS_posts.jsonl            ← NOT in git — MSCS posts (2023 + 2024 cycles)
+│   │   ├── r_MSCS_comments.jsonl         ← NOT in git — MSCS comments
+│   │   ├── r_MSCS_2022_posts.jsonl       ← NOT in git — MSCS 2022 cycle posts
+│   │   └── r_MSCS_2022_comments.jsonl    ← NOT in git — MSCS 2022 cycle comments
+│   ├── mba/
+│   │   ├── posts_clean.jsonl.gz          ← in git — pre-cleaned MBA posts (gzipped, 15MB)
+│   │   └── comments_clean.jsonl.gz       ← in git — pre-cleaned MBA comments (gzipped, 65MB)
 │   └── processed_v2/
-│       ├── gradadmissions/               ← all GradAdmissions pipeline outputs
+│       ├── gradadmissions/               ← GradAdmissions pipeline outputs
 │       │   ├── anchor_posts_v2.parquet
 │       │   ├── exposure_labels_v2.parquet
 │       │   ├── panel_scores_v2.parquet
@@ -51,13 +65,15 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 │       │   ├── dose_exposure_v2.parquet
 │       │   ├── panel_scores_alt.parquet
 │       │   └── user_community_breadth_v2.parquet
-│       ├── mscs/                         ← MSCS pipeline outputs (pending execution)
-│       └── comparison_summary.parquet    ← NB07 output (all key metrics)
+│       ├── mscs/                         ← MSCS pipeline outputs (same parquet set)
+│       ├── mba/                          ← MBA pipeline outputs (same parquet set)
+│       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
+│       │   └── comments_clean.jsonl      ← NOT in git — decompressed from data/mba/
+│       └── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
 ├── models/                               ← clf_anxiety/depression/stress.joblib
 ├── figures/                              ← all PNG outputs
 └── docs/
     ├── LLM_CONTEXT.md                    ← THIS FILE — update after every change
-    ├── AGENTS.md                         ← agent rules — read before making changes
     ├── pipeline.md, flow.md, methodology.md, results.md, quickstart.md
 ```
 
@@ -95,34 +111,35 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 ### Parquet Files (`data/processed_v2/gradadmissions/` or `data/processed_v2/mscs/`)
 
 > All parquet outputs are now in subreddit-specific subdirectories. `SUBREDDIT` at top of each notebook controls which dir is used.
+> Row counts below are from the earlier 2-cycle run — re-run the pipeline to refresh with the 2022 cycle included.
 
-**`exposure_labels_v2.parquet`** — 21,730 rows, 20,932 unique authors
+**`exposure_labels_v2.parquet`** — GA: 22,269 rows (exposed=2,784) | MSCS: 4,299 (exposed=374) | MBA: 25,139 (exposed=3,762) [2-cycle; row counts will grow with 2022 cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | Reddit username |
-| `exposed` | bool | True=2,033 / False=19,697 |
-| `cycle` | int64 | 1 or 2 |
+| `exposed` | bool | — |
+| `cycle` | int64 | 1, 2, or 3 (1 = 2022, 2 = 2023, 3 = 2024) |
 
-**`anchor_posts_v2.parquet`** — 597 rows
+**`anchor_posts_v2.parquet`** — GA: 997 rows | MSCS: 100 | MBA: 471 [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | str | Reddit post ID |
-| `author` | str | 548 unique authors |
+| `author` | str | — |
 | `created_dt` | datetime64[ns, UTC] | — |
-| `cycle` | float64 | 1.0 or 2.0 |
+| `cycle` | float64 | 1.0, 2.0, or 3.0 |
 | `clean_text` | str | — |
-| `anx_score` | float64 | [0.325, 0.756] |
-| `dep_score` | float64 | [0.273, 0.763] |
-| `str_score` | float64 | [0.387, 0.765] |
-| `mean_mh_score` | float64 | [0.392, 0.748] |
-| `score` | int64 | Reddit upvotes [0, 755] |
-| `num_comments` | int64 | [0, 155] |
+| `anx_score` | float64 | — |
+| `dep_score` | float64 | — |
+| `str_score` | float64 | — |
+| `mean_mh_score` | float64 | — |
+| `score` | int64 | Reddit upvotes |
+| `num_comments` | int64 | — |
 
-**`panel_scores_v2.parquet`** — 1,423 rows, 1,368 unique authors (August pre-period)
+**`panel_scores_v2.parquet`** — GA: 7,770 rows (7,578 users) | MSCS: 1,951 (1,894) | MBA: 8,261 (7,619) [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | — |
-| `cycle` | int64 | 1 or 2 |
+| `cycle` | int64 | 1, 2, or 3 |
 | `exposed` | bool | True=322 / False=1,101 |
 | `pre_mh_score` | float64 | [0.103, 0.661] — Aug mean |
 | `pre_anx_score` | float64 | [0.103, 0.672] |
@@ -142,7 +159,7 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 |--------|------|-------|
 | `author` | str | — |
 | `exposed` | bool | True=758 / False=7,110 |
-| `cycle` | int64 | 1 or 2 |
+| `cycle` | int64 | 1, 2, or 3 |
 | `pre_mh_score` | float64 | [0.138, 0.750] |
 | `pre_n_posts` | int64 | [1, 87] |
 | `post_mh_score` | float64 | [0.147, 0.778] |
@@ -150,11 +167,11 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 | `community_breadth` | float64 | [0, 100], **6,528 nulls** |
 | `community_breadth_log` | float64 | log1p(breadth), **6,528 nulls** |
 
-**`post_level_scores_v2.parquet`** — 147,569 rows (all matched-panel users, pre+post)
+**`post_level_scores_v2.parquet`** — 147,569 rows (all matched-panel users, pre+post) [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | 10,693 unique |
-| `cycle` | int64 | 1 or 2 |
+| `cycle` | int64 | 1, 2, or 3 |
 | `window` | str | `"pre"` or `"post"` (NOT period 0/1) |
 | `created_dt` | datetime64[ns, UTC] | — |
 | `anx_score` | float64 | [0.065, 0.988] |
@@ -164,11 +181,11 @@ Causal inference study on r/GradAdmissions **and r/MSCS** (Aug 2023–Jul 2025).
 
 > NB06 post-level DiD filters this to matched authors only → 22,355 observations.
 
-**`dose_exposure_v2.parquet`** — 2,300 rows
+**`dose_exposure_v2.parquet`** — 2,300 rows [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | 2,257 unique |
-| `cycle` | float64 | 1.0 or 2.0 |
+| `cycle` | float64 | 1.0, 2.0, or 3.0 |
 | `n_anchor_comments` | int64 | [1, 49] |
 | `log1p_n_anchor` | float64 | [0.693, 3.912] |
 
@@ -297,11 +314,10 @@ def assign_window(author, dt, cycle):
 | `fig_att_coef_{SUBREDDIT}.png` | NB06 | ATT coefficient plot (user-level DiD per cycle + pooled) |
 | `fig_parallel_trends_{SUBREDDIT}.png` | NB06 | Pre/post mean mh_score — August pre-period matched panel |
 | `fig_parallel_trends_alt_{SUBREDDIT}.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
-| `fig_causal_impact_cycle1_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — Cycle 1 |
-| `fig_causal_impact_cycle2_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — Cycle 2 |
-| `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for both subreddits side by side |
-| `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: GradAdmissions vs MSCS |
-| `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: GradAdmissions vs MSCS |
+| `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — one per cycle present in the panel |
+| `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for all 3 subreddits side by side |
+| `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: all 3 subreddits |
+| `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: all 3 subreddits |
 | `fig_event_study_v2.png` | old pipeline | Event study with SVM mh_score (±2 weeks) |
 | `fig_event_study_clean.png` | old pipeline | Event study with 95% CI (clean version) |
 | `fig_event_study.png` | old pipeline | Event study with VADER distress |
@@ -340,23 +356,22 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 ### NB03 `03_exposure_labels_v2.ipynb`
 | cell_id | Content |
 |---------|---------|
-| `a1000002` | imports + path setup |
-| `a1000004` | load posts + parse dates |
-| `a1000007` | load SVM classifiers |
-| `a1000009` | NEGATIVE_KEYWORDS + anchor filtering |
-| `a1000010` | save anchor_posts_v2.parquet |
-| `a1000012` | load comments |
-| `a1000014` | classify exposed users via link_id |
-| `a1000018` | build + save exposure_labels_v2.parquet |
+| `ad0e35c3` | SUBREDDIT config + path setup |
+| `d2a34181` | imports |
+| `5daa73aa` | load posts |
+| `7765a7b6` | cycle assignment |
+| `52c84e0e` | load SVM classifiers |
+| `f88617fb` | load comments (uses `post_id`, `created_dt`) |
 
 ### NB04 `04_panel_scores.ipynb`
 | cell_id | Content |
 |---------|---------|
-| `b1000002` | imports + path setup |
+| `2819b08e` | SUBREDDIT config + path setup |
+| `b1000002` | imports |
 | `d1000004` | load exposure labels |
-| `g1000007` | build corpus (pre+post windows) |
-| `i1000009` | load classifiers |
-| `k1000011` | score all texts |
+| `f1000006` | first anchor comment scan (uses cleaned JSONL) |
+| `g1000007` | load classifiers |
+| `i1000009` | `process_file` over cleaned JSONL (`clean_text`, `created_dt`) |
 | `ff080f5a` | save post_level_scores_v2.parquet |
 | `71c81c1c` | dose-response: count anchor comments |
 | `m1000013` | aggregate to user-level pre/post |
@@ -392,14 +407,14 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 ### NB07 `07_comparison_analysis.ipynb`
 | cell_id | Content |
 |---------|---------|
-| `c7000002` | imports + paths — loads from both subreddit subdirs |
+| `c7000002` | imports + paths — loads all 3 subreddit subdirs |
 | `c7000004` | panel and anchor post summary per subreddit per cycle |
-| `c7000006` | anchor post characteristics comparison (boxplots) |
+| `c7000006` | anchor post characteristics comparison (boxplots, 3 subreddits) |
 | `c7000008` | PSM + DiD helper functions (psm_match, build_long_df, run_did) |
-| `c7000010` | run PSM + DiD for both subreddits |
-| `c7000012` | ATT coefficient comparison forest plot |
-| `c7000014` | pre/post mh_score distribution boxplots |
-| `c7000016` | Z-test: difference in ATT between subreddits |
+| `c7000010` | run PSM + DiD for all subreddits |
+| `c7000012` | ATT coefficient comparison forest plot (3 subreddits) |
+| `c7000014` | pre/post mh_score distribution boxplots (3 rows × 2 cols) |
+| `c7000016` | Pairwise Z-test across all subreddit combinations × specs (9 tests) |
 | `c7000018` | summary table + save comparison_summary.parquet |
 
 ### NB08 `08_alt_analysis.ipynb`
@@ -436,12 +451,12 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 ## Known Gotchas
 
-0. **SUBREDDIT config variable**: NB01, NB03, NB04, NB05, NB06, NB08 all have `SUBREDDIT = 'gradadmissions'` at the top of their first code cell. Change this to `'mscs'` to run the MSCS pipeline. All output paths automatically route to `data/processed_v2/{SUBREDDIT}/`.
+0. **SUBREDDIT config variable**: NB01, NB03, NB04, NB05, NB06, NB08 all have `SUBREDDIT = 'gradadmissions'` at the top of their first code cell. Supported values: `'gradadmissions'`, `'mscs'`, `'mba'`. All output paths automatically route to `data/processed_v2/{SUBREDDIT}/`. Use `run_pipeline.py` to inject this automatically — do not edit notebooks manually.
 
 1. **Raw vs cleaned field names**:
    - Raw: `created_utc` (int), `selftext` / `body`, `link_id` = `"t3_<id>"`
    - Cleaned: `created_dt` (ISO str), `clean_text`, `post_id` (stripped)
-   - NB08 uses raw files; NB03/04 use cleaned files
+   - NB03, NB04, NB08 all use cleaned files (`posts_clean.jsonl` / `comments_clean.jsonl` from `DATA_V2`)
 
 2. **`mh_score` column naming inconsistency**:
    - `panel_scores_v2.parquet` → `pre_mh_score`, `post_mh_score`
@@ -473,30 +488,38 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 10. **NB06 post-level DiD uses 22,355 rows** — filtered from the full 147,569-row `post_level_scores_v2.parquet` down to matched authors only.
 
+11. **`panel_scores_v2.parquet` includes `exposure_intensity` (int, 0–3) but NOT `exposure_prob`**. NB06 reads `exposure_prob` via `row.get('exposure_prob', 0.0)`, which silently returns 0.0. GPS weighting is therefore degenerate (no-op) for all subreddits in the current data.
+
+12. **NB06 kernel dies (OOM) on low-memory systems** — Linux OOM killer fires when swap is nearly full (seen with Brave browser open). Close browser tabs before running NB06. The Python logic itself is fine; the kernel process launch fails due to swap exhaustion.
+
 ---
 
 ## What Is and Isn't in Git
 
-**In git**: all `*.parquet`, `models/clf_*.joblib`, `figures/*.png`, all notebooks, all docs.
+**In git**: all `*.parquet`, `models/clf_*.joblib`, `figures/*.png`, all notebooks, all docs, `data/mba/*.jsonl.gz`.
 
 **NOT in git** (too large or regenerable):
 - `r_gradadmissions_posts.jsonl` / `r_gradadmissions_comments.jsonl` (raw, repo root)
 - `data/raw/r_MSCS_posts.jsonl` / `data/raw/r_MSCS_comments.jsonl` (raw, data/raw/)
-- `r_gradadmissions_*.cleaned.jsonl` (pre-cleaned, old pipeline)
 - `data/processed_v2/gradadmissions/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01)
 - `data/processed_v2/mscs/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01 with SUBREDDIT='mscs')
+- `data/processed_v2/mba/posts_clean.jsonl` / `comments_clean.jsonl` (decompress from `data/mba/*.gz`)
 
 ---
 
 ## Current Status & Open Issues
 
-- **NB01–NB08 (r/GradAdmissions)**: complete and producing outputs.
-- **NB01–NB08 (r/MSCS)**: pipeline parameterized and ready — must be executed by setting `SUBREDDIT='mscs'` in each notebook and running NB01→NB06→NB08 in order. NB05 (breadth) will fetch all users from API (no cache for MSCS).
-- **NB07 (comparison)**: new notebook — runs after both subreddit pipelines complete. Loads parquets from both subdirs and produces comparison figures + `comparison_summary.parquet`.
-- **NB08**: fixed 2026-04-07 (wrong POSTS_PATH/COMMENTS_PATH). Now parameterized — uses `r_gradadmissions_*.jsonl` at repo root or `data/raw/r_MSCS_*.jsonl` depending on SUBREDDIT.
-- **Primary power problem**: NB06 has ~155 matched pairs/cycle (August pre-period). NB08 has ~668. Consider making NB08 the primary analysis.
-- **Breadth moderation (RQ2)**: inconclusive due to low breadth coverage (1,689/20,932 users). Results vary by specification.
-- **Null results in NB06**: all p > 0.20. Likely underpowered, not absence of effect.
+- **NB01–NB08 (r/GradAdmissions, r/MSCS, r/MBA)**: all complete. All three subreddits have full parquet outputs.
+- **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
+- **`run_pipeline.py`**: use this to run the pipeline. `PRE_CLEANED = {'mba'}` skips NB01 for MBA.
+- **Primary finding (r/MBA)**: pooled DiD = +0.0081, p = 0.0054 ** — statistically significant. Driven by Cycle 1 (+0.0088, p = 0.02) more than Cycle 2 (+0.0071, p = 0.12). This is the first subreddit in the study with a significant result.
+- **r/GradAdmissions and r/MSCS remain null** in the primary NB06 analysis (pooled p = 0.25 and 0.33 respectively). Positive point estimates, underpowered.
+- **Why MBA hits significance**: largest matched panel (1,425 pairs pooled vs 928 GA, 191 MSCS). Effect size is actually similar to GA (+0.008 vs +0.004), but SE is tighter.
+- **NB06 GPS weighting is a no-op for all subreddits** — `exposure_prob` column missing from panel, `.get()` falls back to 0.0. This is a latent bug in the pipeline that does not affect the primary DiD results but makes the GPS-weighted robustness check degenerate.
+- **Pairwise Z-test in NB07** (cell `c7000016`): compares all 3 pairs (GA–MSCS, GA–MBA, MSCS–MBA) × 3 specs (Cycle 1, Cycle 2, Pooled). All pairwise differences are **not significant** (min p = 0.25 for MSCS vs MBA Cycle 1). MBA's pooled ATT (+0.0081) is not statistically distinguishable from GA's (+0.0043, pairwise p = 0.42) despite MBA being internally significant — MBA just has enough N to detect a non-zero effect, while GA does not.
+- **Breadth moderation (RQ2)**: inconclusive due to low breadth coverage. Results vary by specification.
+- **Data time range**: all three subreddits now cover Aug 2022–Jul 2025 (three admission cycles). Raw 2022-cycle JSONLs live under `data/raw/r_{gradadmissions,MSCS}_2022_{posts,comments}.jsonl`; NB01 concatenates them with the main file. MBA's raw already included 2022.
+- **3-cycle refactor (2026-04-21)**: NB03/NB04 CYCLES dict, NB05 `AFTER_DATE=2022-08-01`, NB06 ATT/parallel-trends/post-level/dose/placebo loops, NB07 spec_keys, and NB08 CYCLES + CausalImpact loop all updated to derive cycles dynamically from data instead of hardcoding `[1, 2]`. Re-run the full pipeline to populate parquets with 2022-cycle rows before reading the results docs.
 
 ## Running the Pipeline
 

@@ -41,6 +41,9 @@ PIPELINE_NBS = [
 ]
 COMPARISON_NB = '07_comparison_analysis.ipynb'
 
+# Subreddits whose cleaned data is already present — NB01 is skipped for them
+PRE_CLEANED = {'mba'}
+
 # Short display names for the progress bar
 NB_SHORT = {
     '01_clean_corpus.ipynb':              '01 clean corpus',
@@ -267,6 +270,8 @@ def main() -> None:
     for sr in args.subreddits:
         for nb_name in PIPELINE_NBS:
             if args.start_from and nb_name[:2] < args.start_from:
+                continue
+            if sr in PRE_CLEANED and nb_name == '01_clean_corpus.ipynb':
                 continue
             steps.append((sr, nb_name))
     if not args.skip_comparison:

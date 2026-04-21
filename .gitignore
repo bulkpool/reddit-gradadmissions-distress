@@ -41,7 +41,7 @@ venv/
 Thumbs.db
 
 # ── Temporary pipeline run notebooks ─────────────────────────────────────────
-notebooks/_run_*.ipynb
+# notebooks/_run_*.ipynb
 
 # ── Editor/tool configs ───────────────────────────────────────────────────────
 .codex
