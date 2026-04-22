@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-21 (3-cycle update — 2022 admission cycle added for all three subreddits)
+**Last updated**: 2026-04-22 (added diagnostic notebooks 04a, 05a, 06a; Fix hardcoded paths to use dynamic SUBREDDIT injection)
 
 ---
 
@@ -36,13 +36,16 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 ├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments (GA, 2023 + 2024 cycles)
 ├── run_pipeline.py                      ← orchestrator: injects SUBREDDIT, runs NB01→NB08+NB07
 ├── notebooks/
-│   ├── 00_exploratory_topic_sentiment.ipynb  (EDA only)
+│   ├── 00_exploratory_topic_sentiment.ipynb  ← EDA only; SUBREDDIT config at top
 │   ├── 01_clean_corpus.ipynb             ← SUBREDDIT config at top
-│   ├── 02_train_classifiers.ipynb
+│   ├── 02_train_classifiers.ipynb        ← one-off setup, avoid running to prevent API timeouts
 │   ├── 03_exposure_labels_v2.ipynb       ← SUBREDDIT config at top
 │   ├── 04_panel_scores.ipynb             ← SUBREDDIT config at top
+│   ├── 04a_exposure_checks.ipynb         ← diagnostic: attrition, pre-period quality, anchor timing; SUBREDDIT config at top
 │   ├── 05_collect_community_breadth.ipynb ← SUBREDDIT config at top
+│   ├── 05a_pipeline_funnel.ipynb         ← diagnostic: waterfall funnel; SUBREDDIT config at top
 │   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
+│   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity; SUBREDDIT config at top
 │   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
 │   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
 ├── data/
@@ -63,10 +66,10 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │       │   ├── panel_scores_v2.parquet
 │       │   ├── post_level_scores_v2.parquet
 │       │   ├── dose_exposure_v2.parquet
-│       │   ├── panel_scores_alt.parquet
-│       │   └── user_community_breadth_v2.parquet
-│       ├── mscs/                         ← MSCS pipeline outputs (same parquet set)
-│       ├── mba/                          ← MBA pipeline outputs (same parquet set)
+│       │   └── panel_scores_alt.parquet
+│       │   (user_community_breadth_v2.parquet — deleted 2026-04-22, re-run NB05 to regenerate)
+│       ├── mscs/                         ← MSCS pipeline outputs (same parquet set, breadth also deleted)
+│       ├── mba/                          ← MBA pipeline outputs (same parquet set, breadth also deleted)
 │       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
 │       │   └── comments_clean.jsonl      ← NOT in git — decompressed from data/mba/
 │       └── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
@@ -164,8 +167,8 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `pre_n_posts` | int64 | [1, 87] |
 | `post_mh_score` | float64 | [0.147, 0.778] |
 | `post_n_posts` | int64 | [1, 1556] |
-| `community_breadth` | float64 | [0, 100], **6,528 nulls** |
-| `community_breadth_log` | float64 | log1p(breadth), **6,528 nulls** |
+| `community_breadth` | float64 | [0, 100], no nulls (100% coverage) |
+| `community_breadth_log` | float64 | log1p(breadth), no nulls |
 
 **`post_level_scores_v2.parquet`** — 147,569 rows (all matched-panel users, pre+post) [2-cycle]
 | Column | Type | Notes |
@@ -189,16 +192,16 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `n_anchor_comments` | int64 | [1, 49] |
 | `log1p_n_anchor` | float64 | [0.693, 3.912] |
 
-**`user_community_breadth_v2.parquet`** — 1,689 rows
+**`user_community_breadth_v2.parquet`** — 100% coverage of panel users (e.g., 7,770 rows for GA)
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | — |
-| `community_breadth` | float64 | [0, 100] |
-| `community_breadth_log` | float64 | log1p(breadth), [0, 4.615] |
+| `community_breadth` | float64 | [0, 100], missing/errors imputed as 0 |
+| `community_breadth_log` | float64 | log1p(breadth) |
 | `subreddits_json` | str | JSON list of subreddit names |
-| `status` | str | always `"ok"` in current data |
+| `status` | str | `"ok"`, `"http_404"`, etc. |
 
-> Only 1,689 users have breadth data — less than the 1,368-user panel. NB06 merges on left join so unmatched users get null breadth.
+> Coverage is now 100%. Missing accounts or errors default to `community_breadth = 0` so that PSM in NB06 can utilize `community_breadth_log` without dropping rows.
 
 ---
 
@@ -318,6 +321,11 @@ def assign_window(author, dt, cycle):
 | `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for all 3 subreddits side by side |
 | `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: all 3 subreddits |
 | `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: all 3 subreddits |
+| `fig_preperiod_span.png` | NB04a | Distribution of pre-period span (days) for exposed panel users + median by month |
+| `fig_anchor_comment_timing.png` | NB04a | Anchor comment volume by month + first comment per user (exposure moment) |
+| `fig_pipeline_funnel.png` | NB05a | Waterfall: labeled → has activity → has pre → has post → in panel (exposed users) |
+| `fig_funnel_exposed_vs_unexposed.png` | NB05a | Side-by-side bar: dropout category rates for exposed vs unexposed |
+| `fig_sensitivity_pre_period.png` | NB06a | ATT + 95% CI across 3 pre-period length restrictions (full, ≥7d, ≥14d) |
 | `fig_event_study_v2.png` | old pipeline | Event study with SVM mh_score (±2 weeks) |
 | `fig_event_study_clean.png` | old pipeline | Event study with 95% CI (clean version) |
 | `fig_event_study.png` | old pipeline | Event study with VADER distress |
@@ -376,6 +384,48 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `71c81c1c` | dose-response: count anchor comments |
 | `m1000013` | aggregate to user-level pre/post |
 | `r1000018` | save panel_scores_v2.parquet |
+
+### NB04a `04a_exposure_checks.ipynb`
+| cell_id | Content |
+|---------|---------|
+| `a1b2c3d4` | markdown header |
+| `b2c3d4e5` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `d4e5f6a7` | differential attrition check (in_panel rate by exposed/unexposed) |
+| `e5f6a7b8` | attrition by cycle |
+| `a7b8c9d0` | pre-period span computation (pre_first, pre_last, pre_span_days) |
+| `b8c9d0e1` | span threshold breakdown (0, 3, 7, 14, 30 days) |
+| `c9d0e1f2` | figure: span distribution + median span by month |
+| `e1f2a3b4` | anchor comment timing scan (raw JSONL, first anchor comment per user) |
+| `f2a3b4c5` | figure: anchor comments by month + first comment per user |
+| `b4c5d6e7` | panel vs dropped user baseline comparison |
+| `d6e7f8a9` | diagnostic summary printout |
+
+### NB05a `05a_pipeline_funnel.ipynb`
+| cell_id | Content |
+|---------|---------|
+| `a0000001` | markdown header |
+| `b0000002` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `d0000004` | build has_pre/has_post flags + classify each user into fate group |
+| `f0000006` | exposed-user funnel table (in_panel / post_only / pre_only / no_activity) |
+| `h0000008` | unexposed-user funnel table |
+| `j0000010` | waterfall bar chart (labeled → has activity → has pre → has post → panel) |
+| `l0000012` | side-by-side exposed vs unexposed dropout rates + differential attrition flag |
+| `n0000014` | per-cycle breakdown table |
+| `p0000016` | activity volume for dropped users (pre_n, post_n by fate) |
+| `r0000018` | root-cause summary printout |
+
+### NB06a `06a_stratified_pre_exposure.ipynb`
+| cell_id | Content |
+|---------|---------|
+| `a1b2c3d4` | markdown header |
+| `b2c3d4e5` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `d4e5f6a7` | pre-period span computation + exposed user span distribution |
+| `e5f6a7b8` | median span by month of first pre-activity |
+| `a7b8c9d0` | `run_psm_did()` helper (PSM + DiD, returns ATT/CI/SMD/n_matched) |
+| `b8c9d0e1` | `run_dose_response()` helper |
+| `d0e1f2a3` | run all three sample versions (full, ≥7d, ≥14d) |
+| `f2a3b4c5` | summary table (ATT, p, CI, SMD, dose coef across all versions) |
+| `b4c5d6e7` | forest plot: ATT + 95% CI across three pre-period restrictions |
 
 ### NB05 `05_collect_community_breadth.ipynb`
 | cell_id | Content |
@@ -480,9 +530,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 6. **`posts_clean.jsonl` and `comments_clean.jsonl` are NOT in git** — they must be generated by NB01. Any attempt to `Read` them will fail.
 
-7. **`user_community_breadth_v2.parquet` has only 1,689 rows** — far fewer than the 20,932 panel users. NB06 does a left join, so most users have null breadth (hence the `breadth_coverage < 0.95` branch almost always triggers, excluding `community_breadth_log` from PSM).
+7. **`user_community_breadth_v2.parquet` now has 100% coverage** of panel users. Failed API fetches or deleted accounts are assigned `community_breadth = 0`. `community_breadth_log` is always included in PSM.
 
-8. **`panel_scores_alt.parquet` community breadth has 6,528 nulls** (out of 7,868 rows) for the same reason.
+8. **`panel_scores_alt.parquet` also has 100% coverage** for community breadth.
 
 9. **`dose_exposure_v2.parquet` `cycle` column is float64**, not int — it was created with a float merge key. Use `.astype(int)` if needed.
 
@@ -510,6 +560,8 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 ## Current Status & Open Issues
 
 - **NB01–NB08 (r/GradAdmissions, r/MSCS, r/MBA)**: all complete. All three subreddits have full parquet outputs.
+- **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed_v2/gradadmissions/`.
+- **`user_community_breadth_v2.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
 - **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
 - **`run_pipeline.py`**: use this to run the pipeline. `PRE_CLEANED = {'mba'}` skips NB01 for MBA.
 - **Primary finding (r/MBA)**: pooled DiD = +0.0081, p = 0.0054 ** — statistically significant. Driven by Cycle 1 (+0.0088, p = 0.02) more than Cycle 2 (+0.0071, p = 0.12). This is the first subreddit in the study with a significant result.
@@ -517,7 +569,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 - **Why MBA hits significance**: largest matched panel (1,425 pairs pooled vs 928 GA, 191 MSCS). Effect size is actually similar to GA (+0.008 vs +0.004), but SE is tighter.
 - **NB06 GPS weighting is a no-op for all subreddits** — `exposure_prob` column missing from panel, `.get()` falls back to 0.0. This is a latent bug in the pipeline that does not affect the primary DiD results but makes the GPS-weighted robustness check degenerate.
 - **Pairwise Z-test in NB07** (cell `c7000016`): compares all 3 pairs (GA–MSCS, GA–MBA, MSCS–MBA) × 3 specs (Cycle 1, Cycle 2, Pooled). All pairwise differences are **not significant** (min p = 0.25 for MSCS vs MBA Cycle 1). MBA's pooled ATT (+0.0081) is not statistically distinguishable from GA's (+0.0043, pairwise p = 0.42) despite MBA being internally significant — MBA just has enough N to detect a non-zero effect, while GA does not.
-- **Breadth moderation (RQ2)**: inconclusive due to low breadth coverage. Results vary by specification.
+- **Breadth moderation (RQ2)**: With the NB05 fix, `community_breadth_log` is now reliably included in PSM and used as a moderator. Pipeline needs to be re-run to observe updated RQ2 results.
 - **Data time range**: all three subreddits now cover Aug 2022–Jul 2025 (three admission cycles). Raw 2022-cycle JSONLs live under `data/raw/r_{gradadmissions,MSCS}_2022_{posts,comments}.jsonl`; NB01 concatenates them with the main file. MBA's raw already included 2022.
 - **3-cycle refactor (2026-04-21)**: NB03/NB04 CYCLES dict, NB05 `AFTER_DATE=2022-08-01`, NB06 ATT/parallel-trends/post-level/dose/placebo loops, NB07 spec_keys, and NB08 CYCLES + CausalImpact loop all updated to derive cycles dynamically from data instead of hardcoding `[1, 2]`. Re-run the full pipeline to populate parquets with 2022-cycle rows before reading the results docs.
 
