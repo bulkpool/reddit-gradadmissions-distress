@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-22 (added diagnostic notebooks 04a, 05a, 06a; updated all DATA_DIR paths to processed_v2/gradadmissions/)
+**Last updated**: 2026-04-22 (added diagnostic notebooks 04a, 05a, 06a; Fix hardcoded paths to use dynamic SUBREDDIT injection)
 
 ---
 
@@ -36,16 +36,16 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 ├── r_gradadmissions_comments.jsonl      ← NOT in git — raw comments (GA, 2023 + 2024 cycles)
 ├── run_pipeline.py                      ← orchestrator: injects SUBREDDIT, runs NB01→NB08+NB07
 ├── notebooks/
-│   ├── 00_exploratory_topic_sentiment.ipynb  (EDA only)
+│   ├── 00_exploratory_topic_sentiment.ipynb  ← EDA only; SUBREDDIT config at top
 │   ├── 01_clean_corpus.ipynb             ← SUBREDDIT config at top
-│   ├── 02_train_classifiers.ipynb
+│   ├── 02_train_classifiers.ipynb        ← one-off setup, avoid running to prevent API timeouts
 │   ├── 03_exposure_labels_v2.ipynb       ← SUBREDDIT config at top
 │   ├── 04_panel_scores.ipynb             ← SUBREDDIT config at top
-│   ├── 04a_exposure_checks.ipynb         ← diagnostic: attrition, pre-period quality, anchor timing (gradadmissions only)
+│   ├── 04a_exposure_checks.ipynb         ← diagnostic: attrition, pre-period quality, anchor timing; SUBREDDIT config at top
 │   ├── 05_collect_community_breadth.ipynb ← SUBREDDIT config at top
-│   ├── 05a_pipeline_funnel.ipynb         ← diagnostic: waterfall funnel — where do exposed users drop? (gradadmissions only)
+│   ├── 05a_pipeline_funnel.ipynb         ← diagnostic: waterfall funnel; SUBREDDIT config at top
 │   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
-│   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity to pre-period length (gradadmissions only)
+│   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity; SUBREDDIT config at top
 │   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
 │   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
 ├── data/
