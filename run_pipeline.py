@@ -245,7 +245,7 @@ def main() -> None:
         description='Run the CS598 pipeline for one or more subreddits.'
     )
     parser.add_argument(
-        '--subreddits', nargs='+', default=['gradadmissions', 'mscs'],
+        '--subreddits', nargs='+', default=['gradadmissions', 'mscs', 'mba'],
     )
     parser.add_argument(
         '--start-from', default=None, metavar='NN',
