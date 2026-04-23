@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-22 (added NB09 zero-shot NLI anchor validation; 78% BART confirmation rate)
+**Last updated**: 2026-04-23 (Full BART pipeline executed; anchor_posts.parquet regenerated with BART schema; NB06 robustness check (c) replaced with BART threshold sensitivity; MBA NB06 kernel crash pending fix; torch/transformers added to venv)
 
 ---
 
@@ -24,7 +24,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 - Python venv: `~/venvs/jupyter/bin/` — always use this, never system Python
 - Run notebooks: `~/venvs/jupyter/bin/jupyter nbconvert --to notebook --execute <nb>`
-- Key packages: `scikit-learn`, `statsmodels`, `joblib`, `pandas` (2.x), `numpy`, `matplotlib`, `causalimpact==0.2.6`
+- Key packages: `scikit-learn`, `statsmodels`, `joblib`, `pandas` (2.x), `numpy`, `matplotlib`, `causalimpact==0.2.6`, `torch`, `transformers` (needed by NB03 for BART inference)
 
 ---
 
@@ -48,7 +48,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity; SUBREDDIT config at top
 │   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
 │   ├── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
-│   └── 09_nli_anchor_validation.ipynb   ← NLI validation of anchor posts (all 3 subreddits; no SUBREDDIT param)
+│   └── 09_nli_anchor_validation.ipynb   ← Anchor post characterisation: reads BART fields from anchor_posts.parquet; no inference (all 3 subreddits; no SUBREDDIT param)
 ├── data/
 │   ├── raw/
 │   │   ├── r_gradadmissions_2022_posts.jsonl    ← NOT in git — GA 2022 cycle posts (Aug'22–Jul'23)
@@ -118,14 +118,16 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 > All parquet outputs are now in subreddit-specific subdirectories. `SUBREDDIT` at top of each notebook controls which dir is used.
 > Row counts below are from the earlier 2-cycle run — re-run the pipeline to refresh with the 2022 cycle included.
 
-**`exposure_labels.parquet`** — GA: 22,269 rows (exposed=2,784) | MSCS: 4,299 (exposed=374) | MBA: 25,139 (exposed=3,762) [2-cycle; row counts will grow with 2022 cycle]
+**`exposure_labels.parquet`** — GA: 28,758 rows (exposed=3,999) | MSCS: 4,706 (exposed=496) | MBA: 32,283 (exposed=5,587) [3-cycle, BART-selected anchors]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | Reddit username |
 | `exposed` | bool | — |
 | `cycle` | int64 | 1, 2, or 3 (1 = 2022, 2 = 2023, 3 = 2024) |
+| `exposure_intensity` | float64 | max BART top-neg score across anchor threads commented on (0–1); 0 for unexposed |
+| `exposure_prob` | float64 | popularity-weighted exposure score [0,1] |
 
-**`anchor_posts.parquet`** — GA: 997 rows | MSCS: 100 | MBA: 471 [2-cycle]
+**`anchor_posts.parquet`** — GA: 2,010 | MSCS: 144 | MBA: 885 [3-cycle, BART-selected; keyword filter + bart_is_negative==True]
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | str | Reddit post ID |
@@ -133,19 +135,25 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `created_dt` | datetime64[ns, UTC] | — |
 | `cycle` | float64 | 1.0, 2.0, or 3.0 |
 | `clean_text` | str | — |
-| `anx_score` | float64 | — |
+| `anx_score` | float64 | SVM score (characterisation only — not used for selection) |
 | `dep_score` | float64 | — |
 | `str_score` | float64 | — |
 | `mean_mh_score` | float64 | — |
+| `bart_top_label` | str | Highest-scoring BART label (one of 4 candidates) |
+| `bart_top_score` | float64 | Entailment score for `bart_top_label` |
+| `bart_top_neg_label` | str | Highest-scoring label among the 3 negative candidates |
+| `bart_top_neg_score` | float64 | Entailment score for `bart_top_neg_label`; used as `exposure_intensity` |
+| `bart_is_negative` | bool | Always True (selection criterion) |
 | `score` | int64 | Reddit upvotes |
 | `num_comments` | int64 | — |
 
-**`panel_scores.parquet`** — GA: 7,770 rows (7,578 users) | MSCS: 1,951 (1,894) | MBA: 8,261 (7,619) [2-cycle]
+**`panel_scores.parquet`** — GA: 10,161 rows (9,801 users, exposed=1,236) | MSCS: 2,112 (2,049, exposed=242) | MBA: 10,338 (9,229, exposed=1,891) [3-cycle, BART-selected]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | — |
 | `cycle` | int64 | 1, 2, or 3 |
 | `exposed` | bool | True=322 / False=1,101 |
+| `exposure_intensity` | float64 | max BART top-neg score across anchor threads commented on (0–1); 0 for unexposed |
 | `pre_mh_score` | float64 | [0.103, 0.661] — Aug mean |
 | `pre_anx_score` | float64 | [0.103, 0.672] |
 | `pre_dep_score` | float64 | [0.088, 0.648] |
@@ -205,52 +213,28 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > Coverage is now 100%. Missing accounts or errors default to `community_breadth = 0` so that PSM in NB06 can utilize `community_breadth_log` without dropping rows.
 
-**`nli_anchor_validation.parquet`** — 1,826 rows (all anchor posts, all 3 subreddits) — NB09 output
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | str | Reddit post ID |
-| `author` | str | — |
-| `subreddit` | str | `"gradadmissions"`, `"mscs"`, or `"mba"` |
-| `cycle` | int64 | 1, 2, or 3 |
-| `clean_text` | str | — |
-| `mean_mh_score` | float64 | SVM composite score |
-| `bart_top_label` | str | Highest-scoring BART label (one of 4 candidates) |
-| `bart_top_score` | float64 | Entailment score for `bart_top_label` |
-| `bart_top_neg_label` | str | Highest-scoring label among the 3 negative candidates |
-| `bart_top_neg_score` | float64 | Entailment score for `bart_top_neg_label` |
-| `bart_is_negative` | bool | True if `bart_top_label` is one of the 3 negative labels |
-
-> Inference is cached here — re-run cell `g9000007` only (deleting this file first) to refresh. bool column survives parquet round-trip after `.astype(bool)` cast in NB09.
+> `nli_anchor_validation.parquet` is now obsolete — BART fields are embedded directly in each subreddit's `anchor_posts.parquet`. Delete it if present.
 
 ---
 
 ## Anchor Post Identification (NB03)
 
-**Threshold**: `MH_THRESHOLD = 0.5` (per-dimension, OR logic — post qualifies if ANY one dimension > 0.5)
+**Selection method (as of 2026-04-22):** keyword filter + BART NLI (`facebook/bart-large-mnli`).
+SVM scores are still computed and saved in `anchor_posts.parquet` for characterisation, but are **not** used for selection. This breaks the circularity between the treatment definition and the SVM-based outcome measure in NB04/NB06.
 
-**Keyword list** (regex, case-insensitive OR):
+**Selection logic**: post must match keyword AND `bart_is_negative == True` (BART top label is not `"general admissions discussion"`).
+
+**BART candidate labels:**
 ```python
-NEGATIVE_KEYWORDS = [
-    r'\breject(?:ed|ion)\b',        r'\bdeclin(?:ed|ing)\b',
-    r'\bwaitlist(?:ed)?\b',         r'\bfunding\s+(?:lost|cut|removed|denied|gap|issue)\b',
-    r'\bno\s+funding\b',            r'\bstipend\b',
-    r'\bwithdrew?\s+(?:offer|admission)\b',  r'\bacceptance\s+rate\b',
-    r'\bno\s+(?:offer|response|interview)\b', r'\bsilence\s+from\b',
-    r'\bnot\s+(?:accepted|admitted|selected)\b', r'\bgave\s+up\b',
-    r'\bmental\s+health\b',         r'\banxi(?:ous|ety)\b',
-    r'\bdepress(?:ed|ing|ion)\b',   r'\bstress(?:ed|ful)?\b',
-    r'\boverwhelm(?:ed|ing)\b',     r'\bscared\b',
-    r'\bworr(?:ied|ying)\b',        r'\bfalling\s+apart\b',
-    r'\bbreaking\s+down\b',         r'\bcan(?:\'t|not)\s+(?:take|handle|cope)\b',
-    r'\bno\s+chance\b',             r'\bnot\s+good\s+enough\b',
-    r'\bgave\s+up\b',               r'\bregret\b',
-    r'\bfailed\b',                  r'\bimposter\b',
+CANDIDATE_LABELS = [
+    'negative admissions outcome',
+    'rejection or funding loss',
+    'giving up on graduate school',
+    'general admissions discussion',   # ← negative class
 ]
 ```
 
-**Filter logic**: post must match keyword AND (`anx_score > 0.5` OR `dep_score > 0.5` OR `str_score > 0.5`).
-
-> Docs and old comments say threshold=0.45 — **the actual code uses 0.5**. The parquet shows `mean_mh_score` as low as 0.39, which is possible when only one dimension fires above 0.5.
+**`exposure_intensity`** in `exposure_labels.parquet` = max `bart_top_neg_score` (float 0–1) across anchor threads the user commented on. Previously was `n_dims` (int 0–3, number of SVM dimensions above p67). NB06 RQ1b intensity DiD uses this float score.
 
 ---
 
@@ -473,7 +457,10 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `50f27f84` | post-level DiD setup |
 | `a881695e` | run_post_level_did() + results |
 | `5d371355` | dose-response analysis |
-| `e27bc930` | placebo test |
+| `1b89be1d` | robustness checks header (markdown) |
+| `e27bc930` | robustness checks: (a) placebo, (b) tight post-window Dec–Jan, (c) BART confidence threshold sensitivity at 0.4 / 0.6 |
+| `5413ee45` | summary comparison table header (markdown) |
+| `e4c0bcfe` | summary comparison table + save did_summary.csv |
 
 ### NB07 `07_comparison_analysis.ipynb`
 | cell_id | Content |
@@ -507,19 +494,17 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `b0000024` | coverage comparison summary |
 
 ### NB09 `09_nli_anchor_validation.ipynb`
+NB09 was rewritten (2026-04-22) — it no longer runs BART inference. It reads BART fields already present in `anchor_posts.parquet` from NB03 and produces summary stats and figures.
 | cell_id | Content |
 |---------|---------|
 | `a9000001` | markdown header |
-| `b9000002` | config (SUBREDDITS, CANDIDATE_LABELS, BATCH_SIZE, cache path) |
-| `c9000003` | imports + ROOT / DATA_V2 / FIG_DIR path setup |
-| `d9000004` | install check: transformers, torch, tqdm |
-| `e9000005` | load all 3 subreddits' anchor_posts_v2.parquet → `anchors` (1,826 rows) |
-| `f9000006` | device detection (mps/cuda/cpu) + load facebook/bart-large-mnli pipeline |
-| `g9000007` | run inference OR load from `nli_anchor_validation.parquet` cache; parse_result(); bool cast |
-| `h9000008` | (1) summary stats: overall + per-subreddit confirmation rate, label breakdown |
-| `i9000009` | (2) score distribution histogram + SVM vs BART scatter plot |
-| `j9000010` | (3) 10 agree + 10 disagree examples with full post text |
-| `k9000011` | (4) Cohen's Kappa (loads posts_clean.jsonl if present; fallback agreement rate if absent) |
+| `b9000002` | config: `SUBREDDITS = ['gradadmissions', 'mscs', 'mba']` |
+| `c9000003` | imports + ROOT / DATA / FIG_DIR path setup |
+| `e9000005` | load anchor_posts.parquet from all 3 subreddits → `anchors` concat |
+| `h9000008` | (1) summary stats: per-subreddit counts, label distribution, cycle breakdown, score stats |
+| `i9000009` | (2) BART score distribution histogram + SVM mh_score vs BART top-neg scatter (coloured by label) |
+| `j9000010` | (3) high-confidence examples by BART label (top 5 per label) |
+| `k9000011` | (4) per-cycle anchor counts + BART score by subreddit × label + SVM score summary |
 
 ---
 
@@ -549,7 +534,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
    - `post_level_scores.parquet` → column is `mean_mh_score` (not `mh_score`)
    - NB06 reshapes to `mh_score` in long format at runtime
 
-3. **Anchor threshold is 0.5 per dimension (OR), not 0.45 on mean**: some docs say 0.45 — the code is authoritative at 0.5.
+3. **Anchor selection is BART-based, not SVM-threshold-based**: NB03 uses keyword filter + `bart_is_negative==True`. SVM scores (`anx_score` etc.) are still in `anchor_posts.parquet` for characterisation only.
 
 4. **NB06 PSM uses StandardScaler before logistic regression; NB08 does not.** They are not directly comparable implementations.
 
@@ -574,9 +559,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 10. **NB06 post-level DiD uses 22,355 rows** — filtered from the full 147,569-row `post_level_scores.parquet` down to matched authors only.
 
-11. **`panel_scores.parquet` includes `exposure_intensity` (int, 0–3) but NOT `exposure_prob`**. NB06 reads `exposure_prob` via `row.get('exposure_prob', 0.0)`, which silently returns 0.0. GPS weighting is therefore degenerate (no-op) for all subreddits in the current data.
+11. **`panel_scores.parquet` does NOT include `exposure_prob`** — NB06 reads it from `exposure_labels.parquet` via a separate merge. `exposure_intensity` (float 0–1, BART top-neg score) IS present in `panel_scores.parquet`.
 
-12. **NB06 kernel dies (OOM) on low-memory systems** — Linux OOM killer fires when swap is nearly full (seen with Brave browser open). Close browser tabs before running NB06. The Python logic itself is fine; the kernel process launch fails due to swap exhaustion.
+12. **NB06 MBA kernel crash (OOM)** — MBA NB06 crashes with `DeadKernelError` when system RAM/swap is under pressure (seen with ~1Gi available). GA and MSCS pass fine. Root cause is not yet fully diagnosed — likely the `is_tight_post` row-wise `apply` on 108K rows combined with swap exhaustion. **Fix pending.** Workaround: close browser tabs, re-run MBA NB06 standalone with `run_pipeline.py --subreddits mba --start-from 06`.
 
 ---
 
@@ -595,8 +580,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 ## Current Status & Open Issues
 
-- **NB01–NB08 (r/GradAdmissions, r/MSCS, r/MBA)**: all complete. All three subreddits have full parquet outputs.
-- **NB09 (NLI anchor validation, 2026-04-22)**: Zero-shot BART validation of anchor posts across all 3 subreddits (1,826 posts total). Overall confirmation rate: **78.0%** (GA 78.9%, MBA 78.3%, MSCS 66.0%). Mean BART top-negative-label score: ~0.56. Key finding: ~22% of SVM anchor posts are labeled "general admissions discussion" by BART — these tend to be ambient anxiety/stress posts rather than discrete negative-outcome disclosures (rejection, funding loss). Results cached at `data/processed/nli_anchor_validation.parquet`. Cohen's Kappa requires `posts_clean.jsonl` (run NB01 first).
+- **Full BART pipeline executed (2026-04-23)**: NB03 re-run with BART anchor selection for all 3 subreddits. `anchor_posts.parquet` now has BART columns (`bart_top_label`, `bart_top_neg_score`, `bart_is_negative`, etc.). Counts: GA=2,010, MSCS=144, MBA=885 anchors. NB04/NB05/NB06/NB08 re-run for all subreddits. **GA and MSCS are complete with fresh results. MBA NB06 crashes (see gotcha #12) — fix pending.**
+- **NB06 results (GA, MSCS only — BART pipeline)**: GA pooled DiD and MSCS pooled DiD regenerated; MBA results from the previous (SVM) pipeline run are stale. Re-run MBA NB06 after fixing the crash to get updated results.
+- **NB09 (anchor characterisation, 2026-04-23)**: Reads BART fields from `anchor_posts.parquet` directly (no inference). Ran as final pipeline step.
 - **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed/gradadmissions/`.
 - **`user_community_breadth.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
 - **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
@@ -626,8 +612,11 @@ Runs NB01 → NB03 → NB04 → NB05 → NB06 → NB08 for each subreddit in seq
 # Resume from a specific step (skips earlier notebooks)
 ~/venvs/jupyter/bin/python3 run_pipeline.py --start-from 04
 
-# Skip the comparison notebook
+# Skip the comparison notebook (NB07)
 ~/venvs/jupyter/bin/python3 run_pipeline.py --skip-comparison
+
+# Skip the anchor characterisation notebook (NB09)
+~/venvs/jupyter/bin/python3 run_pipeline.py --skip-validation
 ```
 
 ### How it works

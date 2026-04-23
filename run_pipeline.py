@@ -39,7 +39,8 @@ PIPELINE_NBS = [
     '06_did_analysis.ipynb',
     '08_alt_analysis.ipynb',
 ]
-COMPARISON_NB = '07_comparison_analysis.ipynb'
+COMPARISON_NB  = '07_comparison_analysis.ipynb'
+VALIDATION_NB  = '09_nli_anchor_validation.ipynb'
 
 # Subreddits whose cleaned data is already present — NB01 is skipped for them
 PRE_CLEANED = {'mba'}
@@ -53,6 +54,7 @@ NB_SHORT = {
     '06_did_analysis.ipynb':           '06 DiD analysis',
     '08_alt_analysis.ipynb':              '08 alt analysis',
     '07_comparison_analysis.ipynb':       '07 comparison',
+    '09_nli_anchor_validation.ipynb':     '09 anchor characterisation',
 }
 
 WIDTH = 68   # terminal width for the UI
@@ -254,6 +256,10 @@ def main() -> None:
     parser.add_argument(
         '--skip-comparison', action='store_true',
     )
+    parser.add_argument(
+        '--skip-validation', action='store_true',
+        help='Skip NB09 anchor characterisation notebook',
+    )
     args = parser.parse_args()
 
     LOG_DIR.mkdir(exist_ok=True)
@@ -276,6 +282,8 @@ def main() -> None:
             steps.append((sr, nb_name))
     if not args.skip_comparison:
         steps.append(('', COMPARISON_NB))
+    if not args.skip_validation:
+        steps.append(('', VALIDATION_NB))
 
     total      = len(steps)
     failed: list[str] = []
