@@ -19,7 +19,7 @@ Raw files live at the **repository root** (not in `data/raw/`):
 | `r_gradadmissions_posts.cleaned.jsonl` | Pre-cleaned posts (original pipeline) |
 | `r_gradadmissions_comments.cleaned.jsonl` | Pre-cleaned comments (original pipeline) |
 
-All intermediate outputs go to `data/processed_v2/`.
+All intermediate outputs go to `data/processed/`.
 
 ---
 
@@ -37,10 +37,10 @@ All intermediate outputs go to `data/processed_v2/`.
 | 00 | `00_exploratory_topic_sentiment.ipynb` | Raw data (EDA only) |
 | 01 | `01_clean_corpus.ipynb` | Raw JSONL files |
 | 02 | `02_train_classifiers.ipynb` | Arctic Shift API (training data) |
-| 03 | `03_exposure_labels_v2.ipynb` | 01, 02 |
+| 03 | `03_exposure_labels.ipynb` | 01, 02 |
 | 04 | `04_panel_scores.ipynb` | 01, 02, 03 |
 | 05 | `05_collect_community_breadth.ipynb` | 04 |
-| 06 | `06_did_analysis_v2.ipynb` | 04, 05 |
+| 06 | `06_did_analysis.ipynb` | 04, 05 |
 | 07 | `07_did_analysis_vader_baseline.ipynb` | Old `data/processed/` outputs |
 | 08 | `08_alt_analysis.ipynb` | Raw JSONL, 03, 02 models |
 
@@ -73,7 +73,7 @@ Reads the raw JSONL dumps and produces clean, canonical JSONL files used by all 
 
 The `post_id` field on comments is critical: it enables thread-level exposure identification in NB03.
 
-**Outputs** → `data/processed_v2/`:
+**Outputs** → `data/processed/`:
 
 | File | Schema |
 |------|--------|
@@ -114,7 +114,7 @@ Trains three binary SVM classifiers following Low et al. (2020), using posts fro
 
 ## Notebook 03 — Exposure Labels (v2)
 
-**File**: `notebooks/03_exposure_labels_v2.ipynb`
+**File**: `notebooks/03_exposure_labels.ipynb`
 
 Identifies anchor posts and classifies panel users as exposed or unexposed using thread-level linking via `post_id` / `link_id`.
 
@@ -134,12 +134,12 @@ Identifies anchor posts and classifies panel users as exposed or unexposed using
 | Anchor period | Sep 1–Nov 30, 2023 | Sep 1–Nov 30, 2024 |
 | Active window | Aug 1, 2023–May 31, 2024 | Aug 1, 2024–May 31, 2025 |
 
-**Outputs** → `data/processed_v2/`:
+**Outputs** → `data/processed/`:
 
 | File | Description |
 |------|-------------|
-| `anchor_posts_v2.parquet` | Anchor posts with SVM scores; columns include `id, cycle` |
-| `exposure_labels_v2.parquet` | `author, exposed (bool), cycle` |
+| `anchor_posts.parquet` | Anchor posts with SVM scores; columns include `id, cycle` |
+| `exposure_labels.parquet` | `author, exposed (bool), cycle` |
 
 ---
 
@@ -156,13 +156,13 @@ Scores each panel user's text in the **pre-baseline** (August) and **post-outcom
 | Pre baseline | Aug 1–31, 2023 | Aug 1–31, 2024 |
 | Post outcome | Dec 1, 2023–May 31, 2024 | Dec 1, 2024–May 31, 2025 |
 
-**Outputs** → `data/processed_v2/`:
+**Outputs** → `data/processed/`:
 
 | File | Schema | Description |
 |------|--------|-------------|
-| `panel_scores_v2.parquet` | `author, cycle, exposed, pre_mh_score, pre_n_posts, post_mh_score, post_n_posts` | User-level pre/post scores |
-| `post_level_scores_v2.parquet` | `author, cycle, exposed, period, mh_score, anx, dep, str_, dt` | One row per post/comment for post-level DiD |
-| `dose_exposure_v2.parquet` | `author, cycle, n_anchor_comments` | Anchor comment count per user (for dose-response) |
+| `panel_scores.parquet` | `author, cycle, exposed, pre_mh_score, pre_n_posts, post_mh_score, post_n_posts` | User-level pre/post scores |
+| `post_level_scores.parquet` | `author, cycle, exposed, period, mh_score, anx, dep, str_, dt` | One row per post/comment for post-level DiD |
+| `dose_exposure.parquet` | `author, cycle, n_anchor_comments` | Anchor comment count per user (for dose-response) |
 
 ---
 
@@ -176,9 +176,9 @@ Queries the Arctic Shift API for each v2 panel user's cross-subreddit activity.
 
 **Strategy**: Reuses any existing cache from the old pipeline. Only fetches Arctic Shift for users in the v2 panel not already covered.
 
-**Fault tolerance**: Progress saved to `data/processed_v2/breadth_checkpoint_v2.jsonl` every 500 users.
+**Fault tolerance**: Progress saved to `data/processed/breadth_checkpoint.jsonl` every 500 users.
 
-**Output** → `data/processed_v2/user_community_breadth_v2.parquet`:
+**Output** → `data/processed/user_community_breadth.parquet`:
 
 | Column | Description |
 |--------|-------------|
@@ -190,7 +190,7 @@ Queries the Arctic Shift API for each v2 panel user's cross-subreddit activity.
 
 ## Notebook 06 — Main Analysis (PSM + DiD)
 
-**File**: `notebooks/06_did_analysis_v2.ipynb`
+**File**: `notebooks/06_did_analysis.ipynb`
 
 The primary results notebook. Runs PSM, user-level DiD, post-level DiD, and dose-response analysis.
 
@@ -206,7 +206,7 @@ The primary results notebook. Runs PSM, user-level DiD, post-level DiD, and dose
 
 3. **Post-level DiD** (22,355 observations): same specification but one row per individual post, with and without user fixed effects. Cluster SEs on author. Also decomposed per dimension (anxiety, depression, stress).
 
-4. **Dose-response analysis**: uses `dose_exposure_v2.parquet` to test whether effect scales with number of anchor comments seen.
+4. **Dose-response analysis**: uses `dose_exposure.parquet` to test whether effect scales with number of anchor comments seen.
 
 5. **RQ2 — Community breadth moderation**: three-way interaction `period × exposed × breadth_log`.
 
@@ -238,7 +238,7 @@ Runs the DiD pipeline using VADER `distress_score` as the outcome. Uses older `d
 
 Addresses the power problem in NB06 (only 6.5% user coverage with August pre-period) using two complementary approaches.
 
-**Inputs**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (raw, at repo root), plus `exposure_labels_v2.parquet`, `anchor_posts_v2.parquet`, `user_community_breadth_v2.parquet`, and the three SVM models.
+**Inputs**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (raw, at repo root), plus `exposure_labels.parquet`, `anchor_posts.parquet`, `user_community_breadth.parquet`, and the three SVM models.
 
 **Approach 1 — Redefined pre-period**:
 - Pre = each user's Sep–Nov activity *before* their first anchor comment (exposed users) or full Sep–Nov (unexposed)
@@ -265,4 +265,4 @@ Both methods show directionally consistent positive effects.
 
 **Note**: `causalimpact 0.2.6` is incompatible with pandas 2.x; the notebook patches `pandas.core.dtypes.common.is_datetime_or_timedelta_dtype` at runtime and uses integer index positions for pre/post period arguments.
 
-**Output** → `data/processed_v2/panel_scores_alt.parquet`
+**Output** → `data/processed/panel_scores_alt.parquet`

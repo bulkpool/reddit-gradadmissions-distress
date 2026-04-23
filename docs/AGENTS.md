@@ -81,7 +81,7 @@ Update the **Last updated** date at the top of `LLM_CONTEXT.md`.
 |---------|------------------|
 | Using system Python | Use `~/venvs/jupyter/bin/python3` |
 | Reading `posts_clean.jsonl` directly | It's not in git — run NB01 first or note it's missing |
-| Assuming `mh_score` column exists in parquets | It's `mean_mh_score` in `post_level_scores_v2.parquet` |
+| Assuming `mh_score` column exists in parquets | It's `mean_mh_score` in `post_level_scores.parquet` |
 | Using `created_utc` on cleaned files | Cleaned files use `created_dt` (ISO string) |
 | Anchor threshold = 0.45 | Actual code uses 0.5 (OR across dimensions) |
 | `causalimpact` datetime index | Use integer positions — see NB08 cell `b0000021`/`b0000022` |

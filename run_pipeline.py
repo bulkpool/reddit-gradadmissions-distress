@@ -33,10 +33,10 @@ JUPYTER  = Path.home() / 'venvs' / 'jupyter' / 'bin' / 'jupyter'
 # ── Pipeline order ─────────────────────────────────────────────────────────────
 PIPELINE_NBS = [
     '01_clean_corpus.ipynb',
-    '03_exposure_labels_v2.ipynb',
+    '03_exposure_labels.ipynb',
     '04_panel_scores.ipynb',
     '05_collect_community_breadth.ipynb',
-    '06_did_analysis_v2.ipynb',
+    '06_did_analysis.ipynb',
     '08_alt_analysis.ipynb',
 ]
 COMPARISON_NB = '07_comparison_analysis.ipynb'
@@ -47,10 +47,10 @@ PRE_CLEANED = {'mba'}
 # Short display names for the progress bar
 NB_SHORT = {
     '01_clean_corpus.ipynb':              '01 clean corpus',
-    '03_exposure_labels_v2.ipynb':        '03 exposure labels',
+    '03_exposure_labels.ipynb':        '03 exposure labels',
     '04_panel_scores.ipynb':              '04 panel scores',
     '05_collect_community_breadth.ipynb': '05 breadth (API)',
-    '06_did_analysis_v2.ipynb':           '06 DiD analysis',
+    '06_did_analysis.ipynb':           '06 DiD analysis',
     '08_alt_analysis.ipynb':              '08 alt analysis',
     '07_comparison_analysis.ipynb':       '07 comparison',
 }
@@ -245,7 +245,7 @@ def main() -> None:
         description='Run the CS598 pipeline for one or more subreddits.'
     )
     parser.add_argument(
-        '--subreddits', nargs='+', default=['gradadmissions', 'mscs'],
+        '--subreddits', nargs='+', default=['gradadmissions', 'mscs', 'mba'],
     )
     parser.add_argument(
         '--start-from', default=None, metavar='NN',

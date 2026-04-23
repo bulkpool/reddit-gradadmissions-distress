@@ -39,12 +39,12 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │   ├── 00_exploratory_topic_sentiment.ipynb  ← EDA only; SUBREDDIT config at top
 │   ├── 01_clean_corpus.ipynb             ← SUBREDDIT config at top
 │   ├── 02_train_classifiers.ipynb        ← one-off setup, avoid running to prevent API timeouts
-│   ├── 03_exposure_labels_v2.ipynb       ← SUBREDDIT config at top
+│   ├── 03_exposure_labels.ipynb       ← SUBREDDIT config at top
 │   ├── 04_panel_scores.ipynb             ← SUBREDDIT config at top
 │   ├── 04a_exposure_checks.ipynb         ← diagnostic: attrition, pre-period quality, anchor timing; SUBREDDIT config at top
 │   ├── 05_collect_community_breadth.ipynb ← SUBREDDIT config at top
 │   ├── 05a_pipeline_funnel.ipynb         ← diagnostic: waterfall funnel; SUBREDDIT config at top
-│   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
+│   ├── 06_did_analysis.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
 │   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity; SUBREDDIT config at top
 │   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
 │   ├── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
@@ -60,15 +60,15 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │   ├── mba/
 │   │   ├── posts_clean.jsonl.gz          ← in git — pre-cleaned MBA posts (gzipped, 15MB)
 │   │   └── comments_clean.jsonl.gz       ← in git — pre-cleaned MBA comments (gzipped, 65MB)
-│   └── processed_v2/
+│   └── processed/
 │       ├── gradadmissions/               ← GradAdmissions pipeline outputs
-│       │   ├── anchor_posts_v2.parquet
-│       │   ├── exposure_labels_v2.parquet
-│       │   ├── panel_scores_v2.parquet
-│       │   ├── post_level_scores_v2.parquet
-│       │   ├── dose_exposure_v2.parquet
+│       │   ├── anchor_posts.parquet
+│       │   ├── exposure_labels.parquet
+│       │   ├── panel_scores.parquet
+│       │   ├── post_level_scores.parquet
+│       │   ├── dose_exposure.parquet
 │       │   └── panel_scores_alt.parquet
-│       │   (user_community_breadth_v2.parquet — deleted 2026-04-22, re-run NB05 to regenerate)
+│       │   (user_community_breadth.parquet — deleted 2026-04-22, re-run NB05 to regenerate)
 │       ├── mscs/                         ← MSCS pipeline outputs (same parquet set, breadth also deleted)
 │       ├── mba/                          ← MBA pipeline outputs (same parquet set, breadth also deleted)
 │       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
@@ -105,7 +105,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > Strip `t3_` from `link_id` to get the parent post's `id`. This is how exposure is identified.
 
-### Cleaned JSONL (`data/processed_v2/`, NOT in git — run NB01 to generate)
+### Cleaned JSONL (`data/processed/`, NOT in git — run NB01 to generate)
 
 **`posts_clean.jsonl`**: `id, author, created_dt (ISO str), clean_text, score, num_comments`
 
@@ -113,19 +113,19 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > Note: cleaned files use `created_dt` (string) and `clean_text`, NOT `created_utc` and `selftext`/`body`. Do not confuse with raw fields.
 
-### Parquet Files (`data/processed_v2/gradadmissions/` or `data/processed_v2/mscs/`)
+### Parquet Files (`data/processed/gradadmissions/` or `data/processed/mscs/`)
 
 > All parquet outputs are now in subreddit-specific subdirectories. `SUBREDDIT` at top of each notebook controls which dir is used.
 > Row counts below are from the earlier 2-cycle run — re-run the pipeline to refresh with the 2022 cycle included.
 
-**`exposure_labels_v2.parquet`** — GA: 22,269 rows (exposed=2,784) | MSCS: 4,299 (exposed=374) | MBA: 25,139 (exposed=3,762) [2-cycle; row counts will grow with 2022 cycle]
+**`exposure_labels.parquet`** — GA: 22,269 rows (exposed=2,784) | MSCS: 4,299 (exposed=374) | MBA: 25,139 (exposed=3,762) [2-cycle; row counts will grow with 2022 cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | Reddit username |
 | `exposed` | bool | — |
 | `cycle` | int64 | 1, 2, or 3 (1 = 2022, 2 = 2023, 3 = 2024) |
 
-**`anchor_posts_v2.parquet`** — GA: 997 rows | MSCS: 100 | MBA: 471 [2-cycle]
+**`anchor_posts.parquet`** — GA: 997 rows | MSCS: 100 | MBA: 471 [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | str | Reddit post ID |
@@ -140,7 +140,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `score` | int64 | Reddit upvotes |
 | `num_comments` | int64 | — |
 
-**`panel_scores_v2.parquet`** — GA: 7,770 rows (7,578 users) | MSCS: 1,951 (1,894) | MBA: 8,261 (7,619) [2-cycle]
+**`panel_scores.parquet`** — GA: 7,770 rows (7,578 users) | MSCS: 1,951 (1,894) | MBA: 8,261 (7,619) [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | — |
@@ -172,7 +172,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `community_breadth` | float64 | [0, 100], no nulls (100% coverage) |
 | `community_breadth_log` | float64 | log1p(breadth), no nulls |
 
-**`post_level_scores_v2.parquet`** — 147,569 rows (all matched-panel users, pre+post) [2-cycle]
+**`post_level_scores.parquet`** — 147,569 rows (all matched-panel users, pre+post) [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | 10,693 unique |
@@ -186,7 +186,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > NB06 post-level DiD filters this to matched authors only → 22,355 observations.
 
-**`dose_exposure_v2.parquet`** — 2,300 rows [2-cycle]
+**`dose_exposure.parquet`** — 2,300 rows [2-cycle]
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | 2,257 unique |
@@ -194,7 +194,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `n_anchor_comments` | int64 | [1, 49] |
 | `log1p_n_anchor` | float64 | [0.693, 3.912] |
 
-**`user_community_breadth_v2.parquet`** — 100% coverage of panel users (e.g., 7,770 rows for GA)
+**`user_community_breadth.parquet`** — 100% coverage of panel users (e.g., 7,770 rows for GA)
 | Column | Type | Notes |
 |--------|------|-------|
 | `author` | str | — |
@@ -382,7 +382,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `d4e5f6g7` | MH_SUBREDDITS list + API pull |
 | `h8i9j0k1` | train/eval loop per classifier |
 
-### NB03 `03_exposure_labels_v2.ipynb`
+### NB03 `03_exposure_labels.ipynb`
 | cell_id | Content |
 |---------|---------|
 | `ad0e35c3` | SUBREDDIT config + path setup |
@@ -401,16 +401,16 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `f1000006` | first anchor comment scan (uses cleaned JSONL) |
 | `g1000007` | load classifiers |
 | `i1000009` | `process_file` over cleaned JSONL (`clean_text`, `created_dt`) |
-| `ff080f5a` | save post_level_scores_v2.parquet |
+| `ff080f5a` | save post_level_scores.parquet |
 | `71c81c1c` | dose-response: count anchor comments |
 | `m1000013` | aggregate to user-level pre/post |
-| `r1000018` | save panel_scores_v2.parquet |
+| `r1000018` | save panel_scores.parquet |
 
 ### NB04a `04a_exposure_checks.ipynb`
 | cell_id | Content |
 |---------|---------|
 | `a1b2c3d4` | markdown header |
-| `b2c3d4e5` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `b2c3d4e5` | imports + DATA_DIR (`processed/gradadmissions`) |
 | `d4e5f6a7` | differential attrition check (in_panel rate by exposed/unexposed) |
 | `e5f6a7b8` | attrition by cycle |
 | `a7b8c9d0` | pre-period span computation (pre_first, pre_last, pre_span_days) |
@@ -425,7 +425,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | cell_id | Content |
 |---------|---------|
 | `a0000001` | markdown header |
-| `b0000002` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `b0000002` | imports + DATA_DIR (`processed/gradadmissions`) |
 | `d0000004` | build has_pre/has_post flags + classify each user into fate group |
 | `f0000006` | exposed-user funnel table (in_panel / post_only / pre_only / no_activity) |
 | `h0000008` | unexposed-user funnel table |
@@ -439,7 +439,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | cell_id | Content |
 |---------|---------|
 | `a1b2c3d4` | markdown header |
-| `b2c3d4e5` | imports + DATA_DIR (`processed_v2/gradadmissions`) |
+| `b2c3d4e5` | imports + DATA_DIR (`processed/gradadmissions`) |
 | `d4e5f6a7` | pre-period span computation + exposed user span distribution |
 | `e5f6a7b8` | median span by month of first pre-activity |
 | `a7b8c9d0` | `run_psm_did()` helper (PSM + DiD, returns ATT/CI/SMD/n_matched) |
@@ -456,9 +456,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `f2000006` | load checkpoint + old cache |
 | `h2000008` | fetch_breadth() API function |
 | `i2000009` | main API fetch loop |
-| `n2000014` | save user_community_breadth_v2.parquet |
+| `n2000014` | save user_community_breadth.parquet |
 
-### NB06 `06_did_analysis_v2.ipynb`
+### NB06 `06_did_analysis.ipynb`
 | cell_id | Content |
 |---------|---------|
 | `b3000002` | imports + path setup |
@@ -537,16 +537,16 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 ## Known Gotchas
 
-0. **SUBREDDIT config variable**: NB01, NB03, NB04, NB05, NB06, NB08 all have `SUBREDDIT = 'gradadmissions'` at the top of their first code cell. Supported values: `'gradadmissions'`, `'mscs'`, `'mba'`. All output paths automatically route to `data/processed_v2/{SUBREDDIT}/`. Use `run_pipeline.py` to inject this automatically — do not edit notebooks manually.
+0. **SUBREDDIT config variable**: NB01, NB03, NB04, NB05, NB06, NB08 all have `SUBREDDIT = 'gradadmissions'` at the top of their first code cell. Supported values: `'gradadmissions'`, `'mscs'`, `'mba'`. All output paths automatically route to `data/processed/{SUBREDDIT}/`. Use `run_pipeline.py` to inject this automatically — do not edit notebooks manually.
 
 1. **Raw vs cleaned field names**:
    - Raw: `created_utc` (int), `selftext` / `body`, `link_id` = `"t3_<id>"`
    - Cleaned: `created_dt` (ISO str), `clean_text`, `post_id` (stripped)
-   - NB03, NB04, NB08 all use cleaned files (`posts_clean.jsonl` / `comments_clean.jsonl` from `DATA_V2`)
+   - NB03, NB04, NB08 all use cleaned files (`posts_clean.jsonl` / `comments_clean.jsonl` from `DATA`)
 
 2. **`mh_score` column naming inconsistency**:
-   - `panel_scores_v2.parquet` → `pre_mh_score`, `post_mh_score`
-   - `post_level_scores_v2.parquet` → column is `mean_mh_score` (not `mh_score`)
+   - `panel_scores.parquet` → `pre_mh_score`, `post_mh_score`
+   - `post_level_scores.parquet` → column is `mean_mh_score` (not `mh_score`)
    - NB06 reshapes to `mh_score` in long format at runtime
 
 3. **Anchor threshold is 0.5 per dimension (OR), not 0.45 on mean**: some docs say 0.45 — the code is authoritative at 0.5.
@@ -566,15 +566,15 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 6. **`posts_clean.jsonl` and `comments_clean.jsonl` are NOT in git** — they must be generated by NB01. Any attempt to `Read` them will fail.
 
-7. **`user_community_breadth_v2.parquet` now has 100% coverage** of panel users. Failed API fetches or deleted accounts are assigned `community_breadth = 0`. `community_breadth_log` is always included in PSM.
+7. **`user_community_breadth.parquet` now has 100% coverage** of panel users. Failed API fetches or deleted accounts are assigned `community_breadth = 0`. `community_breadth_log` is always included in PSM.
 
 8. **`panel_scores_alt.parquet` also has 100% coverage** for community breadth.
 
-9. **`dose_exposure_v2.parquet` `cycle` column is float64**, not int — it was created with a float merge key. Use `.astype(int)` if needed.
+9. **`dose_exposure.parquet` `cycle` column is float64**, not int — it was created with a float merge key. Use `.astype(int)` if needed.
 
-10. **NB06 post-level DiD uses 22,355 rows** — filtered from the full 147,569-row `post_level_scores_v2.parquet` down to matched authors only.
+10. **NB06 post-level DiD uses 22,355 rows** — filtered from the full 147,569-row `post_level_scores.parquet` down to matched authors only.
 
-11. **`panel_scores_v2.parquet` includes `exposure_intensity` (int, 0–3) but NOT `exposure_prob`**. NB06 reads `exposure_prob` via `row.get('exposure_prob', 0.0)`, which silently returns 0.0. GPS weighting is therefore degenerate (no-op) for all subreddits in the current data.
+11. **`panel_scores.parquet` includes `exposure_intensity` (int, 0–3) but NOT `exposure_prob`**. NB06 reads `exposure_prob` via `row.get('exposure_prob', 0.0)`, which silently returns 0.0. GPS weighting is therefore degenerate (no-op) for all subreddits in the current data.
 
 12. **NB06 kernel dies (OOM) on low-memory systems** — Linux OOM killer fires when swap is nearly full (seen with Brave browser open). Close browser tabs before running NB06. The Python logic itself is fine; the kernel process launch fails due to swap exhaustion.
 
@@ -587,9 +587,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 **NOT in git** (too large or regenerable):
 - `r_gradadmissions_posts.jsonl` / `r_gradadmissions_comments.jsonl` (raw, repo root)
 - `data/raw/r_MSCS_posts.jsonl` / `data/raw/r_MSCS_comments.jsonl` (raw, data/raw/)
-- `data/processed_v2/gradadmissions/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01)
-- `data/processed_v2/mscs/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01 with SUBREDDIT='mscs')
-- `data/processed_v2/mba/posts_clean.jsonl` / `comments_clean.jsonl` (decompress from `data/mba/*.gz`)
+- `data/processed/gradadmissions/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01)
+- `data/processed/mscs/posts_clean.jsonl` / `comments_clean.jsonl` (run NB01 with SUBREDDIT='mscs')
+- `data/processed/mba/posts_clean.jsonl` / `comments_clean.jsonl` (decompress from `data/mba/*.gz`)
 
 ---
 
@@ -597,8 +597,8 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 
 - **NB01–NB08 (r/GradAdmissions, r/MSCS, r/MBA)**: all complete. All three subreddits have full parquet outputs.
 - **NB09 (NLI anchor validation, 2026-04-22)**: Zero-shot BART validation of anchor posts across all 3 subreddits (1,826 posts total). Overall confirmation rate: **78.0%** (GA 78.9%, MBA 78.3%, MSCS 66.0%). Mean BART top-negative-label score: ~0.56. Key finding: ~22% of SVM anchor posts are labeled "general admissions discussion" by BART — these tend to be ambient anxiety/stress posts rather than discrete negative-outcome disclosures (rejection, funding loss). Results cached at `data/processed/nli_anchor_validation.parquet`. Cohen's Kappa requires `posts_clean.jsonl` (run NB01 first).
-- **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed_v2/gradadmissions/`.
-- **`user_community_breadth_v2.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
+- **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed/gradadmissions/`.
+- **`user_community_breadth.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
 - **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
 - **`run_pipeline.py`**: use this to run the pipeline. `PRE_CLEANED = {'mba'}` skips NB01 for MBA.
 - **Primary finding (r/MBA)**: pooled DiD = +0.0081, p = 0.0054 ** — statistically significant. Driven by Cycle 1 (+0.0088, p = 0.02) more than Cycle 2 (+0.0071, p = 0.12). This is the first subreddit in the study with a significant result.
@@ -631,7 +631,7 @@ Runs NB01 → NB03 → NB04 → NB05 → NB06 → NB08 for each subreddit in seq
 ```
 
 ### How it works
-`run_pipeline.py` injects the correct `SUBREDDIT` value into each notebook's config cell, executes via `nbconvert`, and writes output to a temp directory (source notebooks are never modified). All data outputs land in `data/processed_v2/{subreddit}/`.
+`run_pipeline.py` injects the correct `SUBREDDIT` value into each notebook's config cell, executes via `nbconvert`, and writes output to a temp directory (source notebooks are never modified). All data outputs land in `data/processed/{subreddit}/`.
 
 ---
 
