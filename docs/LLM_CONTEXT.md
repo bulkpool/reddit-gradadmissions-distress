@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; all old-pipeline and no-suffix stale figures removed; fig_nli_kappa_confusion removed from table — NB09 no longer has that cell; diagnostic figures from NB04a/NB05a/NB06a regenerated and committed)
+**Last updated**: 2026-04-23 (NB06 parallel-trends x-axis label corrected to `Pre (Aug)`; NB08 CausalImpact figures fixed to save via `ci.plot(fname=...)`; NB08 alt parallel-trends plot now iterates dynamically over all panel cycles including cycle 3; MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; all old-pipeline and no-suffix stale figures removed; fig_nli_kappa_confusion removed from table — NB09 no longer has that cell; diagnostic figures from NB04a/NB05a/NB06a regenerated and committed)
 
 ---
 
@@ -440,7 +440,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `d3000004` | load panel + merge breadth |
 | `f3000006` | CALIPER, MATCH_FEATURES, psm_match() def |
 | `h3000008` | PSM per cycle → long_rows |
-| `j3000010` | pre-period balance check + visual parallel trends |
+| `j3000010` | pre-period balance check + visual parallel trends (August pre-period; x-axis label is `Pre (Aug)`) |
 | `62ccb4a5` | §4a markdown header (formal parallel trends test) |
 | `7d7c7285` | §4a formal pre-trend test: loads post_level_scores.parquet, regresses mh_score ~ week_number × exposed (pre-period only, matched users); saves parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png |
 | `l3000012` | run_did() def + RQ1 user-level DiD |
@@ -482,10 +482,10 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `b0000012` | aggregate to panel_scores_alt |
 | `b0000013` | save panel_scores_alt.parquet |
 | `b0000015` | psm_match() + run PSM per cycle |
-| `b0000017` | parallel trends plot |
+| `b0000017` | parallel trends plot (dynamic over `panel_cycles`, so cycle 3 is included when present) |
 | `b0000019` | run_did() + DiD per cycle + pooled |
 | `b0000021` | CausalImpact setup + pandas patch |
-| `b0000022` | CausalImpact run per cycle + plots |
+| `b0000022` | CausalImpact run per cycle + plots (saved via `ci.plot(fname=...)` to avoid blank title-only exports under `causalimpact==0.2.6`) |
 | `b0000024` | coverage comparison summary |
 
 ### NB09 `09_nli_anchor_validation.ipynb`
