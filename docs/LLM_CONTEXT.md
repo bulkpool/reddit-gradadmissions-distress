@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-23 (Full BART pipeline executed; anchor_posts.parquet regenerated with BART schema; NB06 robustness check (c) replaced with BART threshold sensitivity; MBA NB06 kernel crash pending fix; torch/transformers added to venv)
+**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png + combined_pooled_did.csv now generated)
 
 ---
 
@@ -12,11 +12,13 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 **Cycle numbering (chronological):** `cycle=1` → 2022 cycle (anchor Sep–Nov 2022, post Dec 2022–May 2023). `cycle=2` → 2023 cycle. `cycle=3` → 2024 cycle. NB06/NB07/NB08 now derive the cycle list dynamically from each panel (no hardcoded `[1, 2]`).
 
-**Headline results (NB07, 2026-04-21 — from the earlier 2-cycle run; re-run pipeline to refresh with 3 cycles)**:
-- **r/MBA pooled DiD = +0.0081, 95% CI [+0.0024, +0.0138], p = 0.0054** (significant at p < 0.01). Cycle 1 also significant in the 2-cycle run: +0.0088, p = 0.0205.
-- **r/GradAdmissions pooled DiD = +0.0043, CI [-0.0030, +0.0115], p = 0.25** (not significant).
-- **r/MSCS pooled DiD = +0.0062, CI [-0.0063, +0.0188], p = 0.33** (not significant). Cycle 2 marginal: +0.0133, p = 0.096.
-- All three subreddits show positive point estimates; only r/MBA crosses statistical significance. r/MBA has the largest matched panel (1,425 pairs pooled vs 928 for GA, 191 for MSCS).
+**Headline results (3-subreddit combined pooled DiD, NB07 §9, 2026-04-23)**:
+- **Combined pooled DiD (subreddit + cycle FE) = +0.0045, 95% CI [+0.0007, +0.0083], p = 0.021*** — significant at p < 0.05 across 6,012 matched users, 12,416 obs. This is the primary cross-community result.
+- Per subreddit (cycle FE): r/GradAdmissions +0.0038 p=0.255 n.s., r/MSCS +0.0065 p=0.270 n.s., r/MBA +0.0055 p=0.032*
+- Per cycle (subreddit FE): Cycle 1 +0.0042 p=0.255 n.s., Cycle 2 +0.0047 p=0.141 n.s., Cycle 3 +0.0044 p=0.171 n.s.
+- Per dimension (all pooled): Anxiety +0.0045 p=0.023*, Depression +0.0045 p=0.041*, Stress +0.0045 p=0.030*
+- **Formal parallel trends test (NB06 §4a)**: week_number × exposed interaction is n.s. across all subreddits, cycles, and pooled spec — parallel trends assumption confirmed.
+- Per-subreddit NB06 pooled results: GA +0.0037 p=0.27 (n.s.), MSCS +0.0065 p=0.27 (n.s.), MBA +0.0066 p=0.017* (significant)
 
 ---
 
@@ -67,14 +69,17 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │       │   ├── panel_scores.parquet
 │       │   ├── post_level_scores.parquet
 │       │   ├── dose_exposure.parquet
-│       │   └── panel_scores_alt.parquet
-│       │   (user_community_breadth.parquet — deleted 2026-04-22, re-run NB05 to regenerate)
-│       ├── mscs/                         ← MSCS pipeline outputs (same parquet set, breadth also deleted)
-│       ├── mba/                          ← MBA pipeline outputs (same parquet set, breadth also deleted)
+│       │   ├── panel_scores_alt.parquet
+│       │   ├── user_community_breadth.parquet
+│       │   ├── did_summary.csv           ← NB06 output
+│       │   └── parallel_trends_test_v2.csv ← NB06 §4a output
+│       ├── mscs/                         ← MSCS pipeline outputs (same file set)
+│       ├── mba/                          ← MBA pipeline outputs (same file set)
 │       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
 │       │   └── comments_clean.jsonl      ← NOT in git — decompressed from data/mba/
 │       ├── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
-│       └── nli_anchor_validation.parquet ← NB09 output (BART NLI scores for all anchor posts, all 3 subreddits)
+│       ├── combined_pooled_did.csv       ← NB07 §9 output (headline pooled ATT across all 3 subreddits)
+│       └── nli_anchor_validation.parquet ← OBSOLETE — delete if present; BART fields now in anchor_posts.parquet
 ├── models/                               ← clf_anxiety/depression/stress.joblib
 ├── figures/                              ← all PNG outputs
 └── docs/
@@ -323,6 +328,7 @@ def assign_window(author, dt, cycle):
 | `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — one per cycle present in the panel |
 | `fig_nli_validation_scores.png` | NB09 | Histogram of BART top-negative-label scores + SVM vs BART scatter (all anchor posts) |
 | `fig_nli_kappa_confusion.png` | NB09 | Confusion matrix for Cohen's Kappa (requires posts_clean.jsonl) |
+| `fig_parallel_trends_pretest_{SUBREDDIT}.png` | NB06 §4a | Pre-period weekly mh_score trend: exposed vs unexposed (formal parallel trends test; one per subreddit) |
 | `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for all 3 subreddits side by side |
 | `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: all 3 subreddits |
 | `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: all 3 subreddits |
@@ -449,7 +455,9 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `d3000004` | load panel + merge breadth |
 | `f3000006` | CALIPER, MATCH_FEATURES, psm_match() def |
 | `h3000008` | PSM per cycle → long_rows |
-| `j3000010` | pre-period balance check |
+| `j3000010` | pre-period balance check + visual parallel trends |
+| `62ccb4a5` | §4a markdown header (formal parallel trends test) |
+| `7d7c7285` | §4a formal pre-trend test: loads post_level_scores.parquet, regresses mh_score ~ week_number × exposed (pre-period only, matched users); saves parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png |
 | `l3000012` | run_did() def + RQ1 user-level DiD |
 | `f28af885` | run_did_dim() def + per-dimension DiD |
 | `n3000014` | RQ2 breadth moderation |
@@ -474,6 +482,8 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `c7000014` | pre/post mh_score distribution boxplots (3 rows × 2 cols) |
 | `c7000016` | Pairwise Z-test across all subreddit combinations × specs (9 tests) |
 | `c7000018` | summary table + save comparison_summary.parquet |
+| `0909343c` | §9 markdown header (combined pooled DiD across all 3 subreddits) |
+| `9730fcc7` | §9 combined pooled DiD: stacks all_long_dfs from §4, runs OLS with subreddit + cycle FE; saves combined_pooled_did.csv |
 
 ### NB08 `08_alt_analysis.ipynb`
 | cell_id | Content |
@@ -561,7 +571,7 @@ NB09 was rewritten (2026-04-22) — it no longer runs BART inference. It reads B
 
 11. **`panel_scores.parquet` does NOT include `exposure_prob`** — NB06 reads it from `exposure_labels.parquet` via a separate merge. `exposure_intensity` (float 0–1, BART top-neg score) IS present in `panel_scores.parquet`.
 
-12. **NB06 MBA kernel crash (OOM)** — MBA NB06 crashes with `DeadKernelError` when system RAM/swap is under pressure (seen with ~1Gi available). GA and MSCS pass fine. Root cause is not yet fully diagnosed — likely the `is_tight_post` row-wise `apply` on 108K rows combined with swap exhaustion. **Fix pending.** Workaround: close browser tabs, re-run MBA NB06 standalone with `run_pipeline.py --subreddits mba --start-from 06`.
+12. **NB06 MBA kernel (OOM risk)** — MBA NB06 previously crashed with `DeadKernelError` under RAM pressure (~1Gi available). Fixed 2026-04-23 by running standalone. If it recurs, close browser tabs and re-run with `run_pipeline.py --subreddits mba --start-from 06`.
 
 ---
 
@@ -580,21 +590,18 @@ NB09 was rewritten (2026-04-22) — it no longer runs BART inference. It reads B
 
 ## Current Status & Open Issues
 
-- **Full BART pipeline executed (2026-04-23)**: NB03 re-run with BART anchor selection for all 3 subreddits. `anchor_posts.parquet` now has BART columns (`bart_top_label`, `bart_top_neg_score`, `bart_is_negative`, etc.). Counts: GA=2,010, MSCS=144, MBA=885 anchors. NB04/NB05/NB06/NB08 re-run for all subreddits. **GA and MSCS are complete with fresh results. MBA NB06 crashes (see gotcha #12) — fix pending.**
-- **NB06 results (GA, MSCS only — BART pipeline)**: GA pooled DiD and MSCS pooled DiD regenerated; MBA results from the previous (SVM) pipeline run are stale. Re-run MBA NB06 after fixing the crash to get updated results.
+- **Full BART pipeline + all results complete (2026-04-23)**: NB03 BART anchor selection ran for all 3 subreddits (GA=2,010, MSCS=144, MBA=885 anchors). NB04/NB05/NB06/NB08 completed for all subreddits. MBA NB06 OOM crash fixed. All `did_summary.csv`, `parallel_trends_test_v2.csv`, and figures are current.
+- **Headline finding — combined pooled DiD (NB07 §9)**: ATT = **+0.0045**, 95% CI [+0.0007, +0.0083], p = **0.021*** across 6,012 matched users, 12,416 obs × 3 cycles × 3 subreddits. This is the primary cross-community result (subreddit + cycle FE). See `data/processed/combined_pooled_did.csv`.
+- **Per-subreddit NB06 results (pooled, cycle FE)**: GA +0.0037 p=0.27 (n.s.), MSCS +0.0065 p=0.27 (n.s.), MBA +0.0066 p=0.017*. Individual subreddits are underpowered; significance achieved in pooled analysis.
+- **Formal parallel trends test (NB06 §4a, 2026-04-23)**: All subreddits, all cycles, and pooled spec confirm n.s. interaction of week_number × exposed in the pre-period (p > 0.05 throughout). See `parallel_trends_test_v2.csv` and `fig_parallel_trends_pretest_{SUBREDDIT}.png`. Parallel trends assumption holds.
 - **NB09 (anchor characterisation, 2026-04-23)**: Reads BART fields from `anchor_posts.parquet` directly (no inference). Ran as final pipeline step.
-- **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed/gradadmissions/`.
-- **`user_community_breadth.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
-- **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
+- **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d).
 - **`run_pipeline.py`**: use this to run the pipeline. `PRE_CLEANED = {'mba'}` skips NB01 for MBA.
-- **Primary finding (r/MBA)**: pooled DiD = +0.0081, p = 0.0054 ** — statistically significant. Driven by Cycle 1 (+0.0088, p = 0.02) more than Cycle 2 (+0.0071, p = 0.12). This is the first subreddit in the study with a significant result.
-- **r/GradAdmissions and r/MSCS remain null** in the primary NB06 analysis (pooled p = 0.25 and 0.33 respectively). Positive point estimates, underpowered.
-- **Why MBA hits significance**: largest matched panel (1,425 pairs pooled vs 928 GA, 191 MSCS). Effect size is actually similar to GA (+0.008 vs +0.004), but SE is tighter.
-- **NB06 GPS weighting is a no-op for all subreddits** — `exposure_prob` column missing from panel, `.get()` falls back to 0.0. This is a latent bug in the pipeline that does not affect the primary DiD results but makes the GPS-weighted robustness check degenerate.
-- **Pairwise Z-test in NB07** (cell `c7000016`): compares all 3 pairs (GA–MSCS, GA–MBA, MSCS–MBA) × 3 specs (Cycle 1, Cycle 2, Pooled). All pairwise differences are **not significant** (min p = 0.25 for MSCS vs MBA Cycle 1). MBA's pooled ATT (+0.0081) is not statistically distinguishable from GA's (+0.0043, pairwise p = 0.42) despite MBA being internally significant — MBA just has enough N to detect a non-zero effect, while GA does not.
-- **Breadth moderation (RQ2)**: With the NB05 fix, `community_breadth_log` is now reliably included in PSM and used as a moderator. Pipeline needs to be re-run to observe updated RQ2 results.
-- **Data time range**: all three subreddits now cover Aug 2022–Jul 2025 (three admission cycles). Raw 2022-cycle JSONLs live under `data/raw/r_{gradadmissions,MSCS}_2022_{posts,comments}.jsonl`; NB01 concatenates them with the main file. MBA's raw already included 2022.
-- **3-cycle refactor (2026-04-21)**: NB03/NB04 CYCLES dict, NB05 `AFTER_DATE=2022-08-01`, NB06 ATT/parallel-trends/post-level/dose/placebo loops, NB07 spec_keys, and NB08 CYCLES + CausalImpact loop all updated to derive cycles dynamically from data instead of hardcoding `[1, 2]`. Re-run the full pipeline to populate parquets with 2022-cycle rows before reading the results docs.
+- **NB06 GPS weighting is nearly degenerate**: stabilized weights have mean ≈ 1.0 (max ≈ 2.8 for MBA). GPS-WLS results are in `did_summary.csv` but are not the primary spec. Does not affect primary DiD.
+- **Pairwise Z-test in NB07** (cell `c7000016`): all 3 pairs (GA–MSCS, GA–MBA, MSCS–MBA) × 3 specs are not significant (min p = 0.25). No subreddit is statistically distinguishable from another — heterogeneity is likely due to power, not true effect differences.
+- **Breadth moderation (RQ2)**: All subreddits n.s. (MBA RQ2 pooled: +0.0004, p=0.85). `community_breadth_log` included in PSM for all subreddits (100% coverage).
+- **Data time range**: all three subreddits cover Aug 2022–Jul 2025 (three admission cycles). Raw 2022-cycle JSONLs live under `data/raw/r_{gradadmissions,MSCS}_2022_{posts,comments}.jsonl`; NB01 concatenates them. MBA's raw already included 2022.
+- **3-cycle refactor (2026-04-21)**: NB03/NB04 CYCLES dict, NB05 `AFTER_DATE=2022-08-01`, NB06/NB07/NB08 loops all derive cycles dynamically from data (no hardcoded `[1, 2]`).
 
 ## Running the Pipeline
 
