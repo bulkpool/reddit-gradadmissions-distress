@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-22 (added diagnostic notebooks 04a, 05a, 06a; Fix hardcoded paths to use dynamic SUBREDDIT injection)
+**Last updated**: 2026-04-22 (added NB09 zero-shot NLI anchor validation; 78% BART confirmation rate)
 
 ---
 
@@ -47,7 +47,8 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │   ├── 06_did_analysis_v2.ipynb          ← MAIN RESULTS; SUBREDDIT config at top
 │   ├── 06a_stratified_pre_exposure.ipynb ← diagnostic: PSM+DiD sensitivity; SUBREDDIT config at top
 │   ├── 07_comparison_analysis.ipynb      ← 3-subreddit comparison (NB07)
-│   └── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
+│   ├── 08_alt_analysis.ipynb             ← Sep–Nov pre-period + CausalImpact; SUBREDDIT config
+│   └── 09_nli_anchor_validation.ipynb   ← NLI validation of anchor posts (all 3 subreddits; no SUBREDDIT param)
 ├── data/
 │   ├── raw/
 │   │   ├── r_gradadmissions_2022_posts.jsonl    ← NOT in git — GA 2022 cycle posts (Aug'22–Jul'23)
@@ -72,7 +73,8 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │       ├── mba/                          ← MBA pipeline outputs (same parquet set, breadth also deleted)
 │       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
 │       │   └── comments_clean.jsonl      ← NOT in git — decompressed from data/mba/
-│       └── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
+│       ├── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
+│       └── nli_anchor_validation.parquet ← NB09 output (BART NLI scores for all anchor posts, all 3 subreddits)
 ├── models/                               ← clf_anxiety/depression/stress.joblib
 ├── figures/                              ← all PNG outputs
 └── docs/
@@ -203,6 +205,23 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > Coverage is now 100%. Missing accounts or errors default to `community_breadth = 0` so that PSM in NB06 can utilize `community_breadth_log` without dropping rows.
 
+**`nli_anchor_validation.parquet`** — 1,826 rows (all anchor posts, all 3 subreddits) — NB09 output
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | str | Reddit post ID |
+| `author` | str | — |
+| `subreddit` | str | `"gradadmissions"`, `"mscs"`, or `"mba"` |
+| `cycle` | int64 | 1, 2, or 3 |
+| `clean_text` | str | — |
+| `mean_mh_score` | float64 | SVM composite score |
+| `bart_top_label` | str | Highest-scoring BART label (one of 4 candidates) |
+| `bart_top_score` | float64 | Entailment score for `bart_top_label` |
+| `bart_top_neg_label` | str | Highest-scoring label among the 3 negative candidates |
+| `bart_top_neg_score` | float64 | Entailment score for `bart_top_neg_label` |
+| `bart_is_negative` | bool | True if `bart_top_label` is one of the 3 negative labels |
+
+> Inference is cached here — re-run cell `g9000007` only (deleting this file first) to refresh. bool column survives parquet round-trip after `.astype(bool)` cast in NB09.
+
 ---
 
 ## Anchor Post Identification (NB03)
@@ -318,6 +337,8 @@ def assign_window(author, dt, cycle):
 | `fig_parallel_trends_{SUBREDDIT}.png` | NB06 | Pre/post mean mh_score — August pre-period matched panel |
 | `fig_parallel_trends_alt_{SUBREDDIT}.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
 | `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — one per cycle present in the panel |
+| `fig_nli_validation_scores.png` | NB09 | Histogram of BART top-negative-label scores + SVM vs BART scatter (all anchor posts) |
+| `fig_nli_kappa_confusion.png` | NB09 | Confusion matrix for Cohen's Kappa (requires posts_clean.jsonl) |
 | `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for all 3 subreddits side by side |
 | `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: all 3 subreddits |
 | `fig_anchor_comparison.png` | NB07 | Anchor post characteristics: all 3 subreddits |
@@ -485,6 +506,21 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `b0000022` | CausalImpact run per cycle + plots |
 | `b0000024` | coverage comparison summary |
 
+### NB09 `09_nli_anchor_validation.ipynb`
+| cell_id | Content |
+|---------|---------|
+| `a9000001` | markdown header |
+| `b9000002` | config (SUBREDDITS, CANDIDATE_LABELS, BATCH_SIZE, cache path) |
+| `c9000003` | imports + ROOT / DATA_V2 / FIG_DIR path setup |
+| `d9000004` | install check: transformers, torch, tqdm |
+| `e9000005` | load all 3 subreddits' anchor_posts_v2.parquet → `anchors` (1,826 rows) |
+| `f9000006` | device detection (mps/cuda/cpu) + load facebook/bart-large-mnli pipeline |
+| `g9000007` | run inference OR load from `nli_anchor_validation.parquet` cache; parse_result(); bool cast |
+| `h9000008` | (1) summary stats: overall + per-subreddit confirmation rate, label breakdown |
+| `i9000009` | (2) score distribution histogram + SVM vs BART scatter plot |
+| `j9000010` | (3) 10 agree + 10 disagree examples with full post text |
+| `k9000011` | (4) Cohen's Kappa (loads posts_clean.jsonl if present; fallback agreement rate if absent) |
+
 ---
 
 ## Key Variable Names at End of Each Notebook
@@ -560,6 +596,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 ## Current Status & Open Issues
 
 - **NB01–NB08 (r/GradAdmissions, r/MSCS, r/MBA)**: all complete. All three subreddits have full parquet outputs.
+- **NB09 (NLI anchor validation, 2026-04-22)**: Zero-shot BART validation of anchor posts across all 3 subreddits (1,826 posts total). Overall confirmation rate: **78.0%** (GA 78.9%, MBA 78.3%, MSCS 66.0%). Mean BART top-negative-label score: ~0.56. Key finding: ~22% of SVM anchor posts are labeled "general admissions discussion" by BART — these tend to be ambient anxiety/stress posts rather than discrete negative-outcome disclosures (rejection, funding loss). Results cached at `data/processed/nli_anchor_validation.parquet`. Cohen's Kappa requires `posts_clean.jsonl` (run NB01 first).
 - **NB04a/05a/06a (diagnostic notebooks, gradadmissions only, added 2026-04-22)**: NB04a checks differential attrition, pre-period quality, and anchor timing. NB05a produces a pipeline funnel showing 967/2,871 exposed users enter the panel (33.7%); dominant dropout is no activity at all (863, 30%), then missing pre-period baseline (737, 25.7%), then missing post-period (304, 10.6%). NB06a tests PSM+DiD sensitivity to pre-period length restrictions (full, ≥7d, ≥14d). All three use DATA_DIR = `processed_v2/gradadmissions/`.
 - **`user_community_breadth_v2.parquet` deleted from git (2026-04-22)** for all three subreddits — re-run NB05 to regenerate before running NB06 (which needs breadth for PSM feature selection).
 - **NB07 (comparison)**: last run 2026-04-21 15:31. Produces `fig_att_comparison.png`, `fig_mhscore_distributions.png`, `fig_anchor_comparison.png`, `comparison_summary.parquet`.
