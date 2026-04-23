@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png + combined_pooled_did.csv now generated; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; old-pipeline figures removed)
+**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; all old-pipeline and no-suffix stale figures removed; fig_nli_kappa_confusion removed from table — NB09 no longer has that cell; diagnostic figures from NB04a/NB05a/NB06a regenerated and committed)
 
 ---
 
@@ -326,7 +326,6 @@ def assign_window(author, dt, cycle):
 | `fig_parallel_trends_alt_{SUBREDDIT}.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
 | `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — one per cycle present in the panel |
 | `fig_nli_validation_scores.png` | NB09 | Histogram of BART top-negative-label scores + SVM vs BART scatter (all anchor posts) |
-| `fig_nli_kappa_confusion.png` | NB09 | Confusion matrix for Cohen's Kappa (requires posts_clean.jsonl) |
 | `fig_parallel_trends_pretest_{SUBREDDIT}.png` | NB06 §4a | Pre-period weekly mh_score trend: exposed vs unexposed (formal parallel trends test; one per subreddit) |
 | `fig_att_comparison.png` | NB07 | Forest plot: ATT coefficients for all 3 subreddits side by side |
 | `fig_mhscore_distributions.png` | NB07 | Pre/post mh_score boxplots: all 3 subreddits |
