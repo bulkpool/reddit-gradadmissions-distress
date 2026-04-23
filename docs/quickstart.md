@@ -38,14 +38,14 @@ Several expensive steps are pre-computed and included:
 | Already included | Skips |
 |-----------------|-------|
 | `models/clf_anxiety.joblib` etc. | SVM classifier training (~15 min API + training) |
-| `data/processed_v2/panel_scores_v2.parquet` | Pre/post scoring pass |
-| `data/processed_v2/panel_scores_alt.parquet` | NB08 Sep–Nov panel |
-| `data/processed_v2/post_level_scores_v2.parquet` | Post-level DiD dataset |
-| `data/processed_v2/dose_exposure_v2.parquet` | Dose-response dataset |
-| `data/processed_v2/exposure_labels_v2.parquet` | Exposure classification |
-| `data/processed_v2/anchor_posts_v2.parquet` | Anchor post list |
-| `data/processed_v2/user_community_breadth_v2.parquet` | Breadth (~3 hr API run) |
-| `data/processed_v2/breadth_checkpoint_v2.jsonl` | API checkpoint (resumable) |
+| `data/processed/panel_scores.parquet` | Pre/post scoring pass |
+| `data/processed/panel_scores_alt.parquet` | NB08 Sep–Nov panel |
+| `data/processed/post_level_scores.parquet` | Post-level DiD dataset |
+| `data/processed/dose_exposure.parquet` | Dose-response dataset |
+| `data/processed/exposure_labels.parquet` | Exposure classification |
+| `data/processed/anchor_posts.parquet` | Anchor post list |
+| `data/processed/user_community_breadth.parquet` | Breadth (~3 hr API run) |
+| `data/processed/breadth_checkpoint.jsonl` | API checkpoint (resumable) |
 | `figures/*.png` | All output figures |
 
 ---
@@ -63,10 +63,10 @@ Several expensive steps are pre-computed and included:
 |------|----------|---------|-------|
 | 1 | `01_clean_corpus.ipynb` | ~5 min | Reads raw JSONL from repo root |
 | 2 | `02_train_classifiers.ipynb` | ~15 min | Skip if `models/clf_*.joblib` exist |
-| 3 | `03_exposure_labels_v2.ipynb` | ~3 min | — |
+| 3 | `03_exposure_labels.ipynb` | ~3 min | — |
 | 4 | `04_panel_scores.ipynb` | ~10 min | — |
 | 5 | `05_collect_community_breadth.ipynb` | ~3 hr | Skip — already done, see above |
-| 6 | `06_did_analysis_v2.ipynb` | ~2 min | Main results |
+| 6 | `06_did_analysis.ipynb` | ~2 min | Main results |
 | 7 | `08_alt_analysis.ipynb` | ~15 min | Reads raw JSONL; needs causalimpact |
 
 ---
@@ -79,7 +79,7 @@ Applies text normalization, deduplication, bot filtering, and adds `post_id` map
 
 **Reads**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (repo root)
 
-**Writes**: `data/processed_v2/posts_clean.jsonl`, `data/processed_v2/comments_clean.jsonl`
+**Writes**: `data/processed/posts_clean.jsonl`, `data/processed/comments_clean.jsonl`
 
 ---
 
@@ -93,11 +93,11 @@ Trains three binary SVMs (anxiety, depression, stress) via Arctic Shift API pull
 
 ---
 
-### Step 3 — Exposure Labels (`03_exposure_labels_v2.ipynb`)
+### Step 3 — Exposure Labels (`03_exposure_labels.ipynb`)
 
 Identifies anchor posts and classifies all panel users as exposed (commented on anchor thread via `link_id`) or unexposed.
 
-> **Shortcut**: Skip — `data/processed_v2/exposure_labels_v2.parquet` and `anchor_posts_v2.parquet` are included.
+> **Shortcut**: Skip — `data/processed/exposure_labels.parquet` and `anchor_posts.parquet` are included.
 
 ---
 
@@ -111,17 +111,17 @@ Scores every panel user's August (pre) and Dec–May (post) text. Also produces 
 
 ### Step 5 — Community Breadth (`05_collect_community_breadth.ipynb`) — *skip*
 
-> **Skip this step** — `data/processed_v2/user_community_breadth_v2.parquet` is included.
+> **Skip this step** — `data/processed/user_community_breadth.parquet` is included.
 
-Makes ~21k Arctic Shift API requests. Checkpoint in `data/processed_v2/breadth_checkpoint_v2.jsonl` — safe to resume if re-running.
+Makes ~21k Arctic Shift API requests. Checkpoint in `data/processed/breadth_checkpoint.jsonl` — safe to resume if re-running.
 
 ---
 
-### Step 6 — Main DiD Analysis (`06_did_analysis_v2.ipynb`)
+### Step 6 — Main DiD Analysis (`06_did_analysis.ipynb`)
 
 Runs PSM, user-level DiD (RQ1 + RQ2), post-level DiD, and dose-response analysis.
 
-**Reads**: `data/processed_v2/panel_scores_v2.parquet`, `user_community_breadth_v2.parquet`
+**Reads**: `data/processed/panel_scores.parquet`, `user_community_breadth.parquet`
 
 **Writes**: figures to `figures/`
 
@@ -133,9 +133,9 @@ Runs PSM, user-level DiD (RQ1 + RQ2), post-level DiD, and dose-response analysis
 
 Redefines the pre-period to Sep–Nov (4× more matched pairs) and runs Causal Impact.
 
-**Reads**: raw JSONL from repo root, `exposure_labels_v2.parquet`, `anchor_posts_v2.parquet`, `user_community_breadth_v2.parquet`, `models/clf_*.joblib`
+**Reads**: raw JSONL from repo root, `exposure_labels.parquet`, `anchor_posts.parquet`, `user_community_breadth.parquet`, `models/clf_*.joblib`
 
-**Writes**: `data/processed_v2/panel_scores_alt.parquet`, `figures/fig_causal_impact_*.png`, `figures/fig_parallel_trends_alt.png`
+**Writes**: `data/processed/panel_scores_alt.parquet`, `figures/fig_causal_impact_*.png`, `figures/fig_parallel_trends_alt.png`
 
 **Runtime**: ~15 min (rescores all raw text)
 
@@ -147,16 +147,16 @@ Redefines the pre-period to Sep–Nov (4× more matched pairs) and runs Causal I
 |------|---------|---------------|
 | `r_gradadmissions_posts.jsonl` | No | Obtain from data source |
 | `r_gradadmissions_comments.jsonl` | No | Obtain from data source |
-| `data/processed_v2/posts_clean.jsonl` | No | Run NB01 |
-| `data/processed_v2/comments_clean.jsonl` | No | Run NB01 |
-| `data/processed_v2/panel_scores_v2.parquet` | Yes | — |
-| `data/processed_v2/panel_scores_alt.parquet` | Yes | — |
-| `data/processed_v2/post_level_scores_v2.parquet` | Yes | — |
-| `data/processed_v2/dose_exposure_v2.parquet` | Yes | — |
-| `data/processed_v2/exposure_labels_v2.parquet` | Yes | — |
-| `data/processed_v2/anchor_posts_v2.parquet` | Yes | — |
-| `data/processed_v2/user_community_breadth_v2.parquet` | Yes | — |
-| `data/processed_v2/breadth_checkpoint_v2.jsonl` | Yes | — |
+| `data/processed/posts_clean.jsonl` | No | Run NB01 |
+| `data/processed/comments_clean.jsonl` | No | Run NB01 |
+| `data/processed/panel_scores.parquet` | Yes | — |
+| `data/processed/panel_scores_alt.parquet` | Yes | — |
+| `data/processed/post_level_scores.parquet` | Yes | — |
+| `data/processed/dose_exposure.parquet` | Yes | — |
+| `data/processed/exposure_labels.parquet` | Yes | — |
+| `data/processed/anchor_posts.parquet` | Yes | — |
+| `data/processed/user_community_breadth.parquet` | Yes | — |
+| `data/processed/breadth_checkpoint.jsonl` | Yes | — |
 | `models/clf_anxiety.joblib` | Yes | — |
 | `models/clf_depression.joblib` | Yes | — |
 | `models/clf_stress.joblib` | Yes | — |

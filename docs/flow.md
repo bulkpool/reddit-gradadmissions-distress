@@ -15,10 +15,10 @@ flowchart TD
 
     N01["01_clean_corpus.ipynb\nCorpus cleaning\n→ posts_clean.jsonl\n→ comments_clean.jsonl\n(with post_id mapping)"]
     N02["02_train_classifiers.ipynb\nTrain 3 LinearSVC models\n→ clf_anxiety/depression/stress.joblib"]
-    N03["03_exposure_labels_v2.ipynb\nAnchor post identification\nThread-level exposure via link_id\n→ anchor_posts_v2.parquet\n→ exposure_labels_v2.parquet"]
-    N04["04_panel_scores.ipynb\nPanel scoring (pre/post windows)\nPost-level scores + dose exposure\n→ panel_scores_v2.parquet\n→ post_level_scores_v2.parquet\n→ dose_exposure_v2.parquet"]
-    N05["05_collect_community_breadth.ipynb\nReuse cache + fetch new users\n→ user_community_breadth_v2.parquet"]
-    N06["06_did_analysis_v2.ipynb\nPSM + user-level DiD\nPost-level DiD + dose-response\n→ RQ1 & RQ2 results (main)"]
+    N03["03_exposure_labels.ipynb\nAnchor post identification\nThread-level exposure via link_id\n→ anchor_posts.parquet\n→ exposure_labels.parquet"]
+    N04["04_panel_scores.ipynb\nPanel scoring (pre/post windows)\nPost-level scores + dose exposure\n→ panel_scores.parquet\n→ post_level_scores.parquet\n→ dose_exposure.parquet"]
+    N05["05_collect_community_breadth.ipynb\nReuse cache + fetch new users\n→ user_community_breadth.parquet"]
+    N06["06_did_analysis.ipynb\nPSM + user-level DiD\nPost-level DiD + dose-response\n→ RQ1 & RQ2 results (main)"]
     N08["08_alt_analysis.ipynb\nSep-Nov pre-period (4× more power)\nCausal Impact (BSTS)\n→ panel_scores_alt.parquet\n→ RQ1 robustness results"]
 
     RQ1["RQ1\nExposure → Δ mh_score\nperiod×exposed coefficient\nDirectionally positive, p≈0.07–0.48"]
@@ -56,7 +56,7 @@ Reads the raw JSONL dumps and produces canonical clean files for all downstream 
 
 **Text normalization** produces a `clean_text` field: lowercase → strip URLs → strip non-alphanumeric → collapse whitespace.
 
-**Outputs**: `data/processed_v2/posts_clean.jsonl`, `data/processed_v2/comments_clean.jsonl`
+**Outputs**: `data/processed/posts_clean.jsonl`, `data/processed/comments_clean.jsonl`
 
 ---
 
@@ -76,7 +76,7 @@ Three binary SVMs (anxiety / depression / stress) trained on mental health subre
 
 ## Stage 3 — Defining Exposure
 
-### Notebook 03 — Anchor Posts & Exposure Labels (`03_exposure_labels_v2.ipynb`)
+### Notebook 03 — Anchor Posts & Exposure Labels (`03_exposure_labels.ipynb`)
 
 Defines who is **exposed** (treated) and who is **unexposed** (control) for each admissions cycle.
 
@@ -93,7 +93,7 @@ Two cycles are processed independently:
 | Anchor period | Sep–Nov 2023 | Sep–Nov 2024 |
 | Active window | Aug 2023–May 2024 | Aug 2024–May 2025 |
 
-**Outputs**: `data/processed_v2/anchor_posts_v2.parquet`, `data/processed_v2/exposure_labels_v2.parquet`
+**Outputs**: `data/processed/anchor_posts.parquet`, `data/processed/exposure_labels.parquet`
 
 ---
 
@@ -110,7 +110,7 @@ Also produces a post-level dataset (one row per post/comment) for post-level DiD
 
 **Why August and December–May?** August is the quiet period before application season — a clean baseline. December–May is peak decision season: offers, rejections, waitlists. The limitation: August activity is sparse, yielding only ~6.5% user coverage. NB08 addresses this.
 
-**Outputs**: `data/processed_v2/panel_scores_v2.parquet`, `post_level_scores_v2.parquet`, `dose_exposure_v2.parquet`
+**Outputs**: `data/processed/panel_scores.parquet`, `post_level_scores.parquet`, `dose_exposure.parquet`
 
 ### Notebook 05 — Community Breadth (`05_collect_community_breadth.ipynb`)
 
@@ -118,13 +118,13 @@ Pulls each panel user's activity across all of Reddit to compute how many distin
 
 Reuses the old pipeline's cache and only queries Arctic Shift for new users.
 
-**Output**: `data/processed_v2/user_community_breadth_v2.parquet`
+**Output**: `data/processed/user_community_breadth.parquet`
 
 ---
 
 ## Stage 5 — Causal Estimation
 
-### Notebook 06 — PSM + DiD (`06_did_analysis_v2.ipynb`)
+### Notebook 06 — PSM + DiD (`06_did_analysis.ipynb`)
 
 **Propensity Score Matching** (per cycle): 1:1 nearest-neighbor matching using logistic regression on `pre_mh_score + log1p_n_posts_pre`. Caliper = 0.05. SMD balance checks confirm covariate balance pre/post matching.
 
@@ -154,26 +154,26 @@ The `period×exposed` coefficient is the DiD estimate. HC3 robust SEs correct fo
 
 ```
 r_gradadmissions_*.jsonl  (repo root, not in git)
-    └─ NB01 ──► data/processed_v2/posts_clean.jsonl
-                data/processed_v2/comments_clean.jsonl
+    └─ NB01 ──► data/processed/posts_clean.jsonl
+                data/processed/comments_clean.jsonl
                     │
                     ├─ NB03 ◄── NB02 (models/clf_*.joblib)
-                    │    └──► data/processed_v2/exposure_labels_v2.parquet
-                    │                           anchor_posts_v2.parquet
+                    │    └──► data/processed/exposure_labels.parquet
+                    │                           anchor_posts.parquet
                     │               │
                     └─ NB04 ◄───────┘ + models/clf_*.joblib
-                        └──► data/processed_v2/panel_scores_v2.parquet
-                                            post_level_scores_v2.parquet
-                                            dose_exposure_v2.parquet
+                        └──► data/processed/panel_scores.parquet
+                                            post_level_scores.parquet
+                                            dose_exposure.parquet
                                     │
                             NB05 ◄──┘ + Arctic Shift API
-                             └──► data/processed_v2/user_community_breadth_v2.parquet
+                             └──► data/processed/user_community_breadth.parquet
                                             │
                             NB06 ◄──────────┘
                              └──► figures/ + RQ1/RQ2 tables
 
 r_gradadmissions_*.jsonl ──► NB08 ◄── NB03 outputs + NB02 models + NB05 outputs
-                              └──► data/processed_v2/panel_scores_alt.parquet
+                              └──► data/processed/panel_scores_alt.parquet
                                    figures/fig_causal_impact_*.png
                                    figures/fig_parallel_trends_alt.png
 ```

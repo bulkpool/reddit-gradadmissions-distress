@@ -265,8 +265,8 @@ This is the main distress measure used later.
 Then it saves:
 
 - model files in `models/clf_*.joblib`
-- `data/processed/scored_corpus_v2.parquet`
-- `data/processed/user_weekly_scores_v2.parquet`
+- `data/processed/scored_corpus.parquet`
+- `data/processed/user_weekly_scores.parquet`
 
 Why this notebook exists:
 
@@ -313,7 +313,7 @@ Important code idea:
 
 ## Notebook 05: The Main Comparison
 
-File: `notebooks/05_did_analysis_v2.ipynb`
+File: `notebooks/06_did_analysis.ipynb`
 
 This is the main analysis notebook. If the repo has a "final boss," this is it.
 
@@ -501,11 +501,11 @@ These are the handoff files that make the whole repo work:
 
 - Weekly averages using VADER-style measures.
 
-`scored_corpus_v2.parquet`
+`scored_corpus.parquet`
 
 - Full corpus plus smarter mental-health classifier scores.
 
-`user_weekly_scores_v2.parquet`
+`user_weekly_scores.parquet`
 
 - Weekly averages using the smarter `mh_score`.
 

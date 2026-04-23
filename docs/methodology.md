@@ -15,7 +15,7 @@ A post qualifies as an anchor if it meets all three criteria:
 2. Matches a negative keyword list (reject, decline, waitlist, anxiety, depressed, stress, falling apart…)
 3. `mh_score > 0.45` from the three SVM classifiers
 
-**Result**: varies by cycle; see `data/processed_v2/anchor_posts_v2.parquet`.
+**Result**: varies by cycle; see `data/processed/anchor_posts.parquet`.
 
 ---
 
