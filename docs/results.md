@@ -1,8 +1,6 @@
 # Results
 
-Full results from the v2 pipeline. For methodology details, see [Methodology](methodology.md).
-
-**Note on interpretation**: The v2 pipeline uses stricter causal identification (thread-level exposure via `link_id`, PSM with formal balance checks) compared to the old pipeline. Effects are directionally positive but currently do not reach p < 0.05. This is partly a power issue — the August pre-period captures only ~6.5% of users, yielding ~155 matched pairs/cycle. NB08 addresses this with a higher-coverage alternative.
+Full results from the 3-cycle BART-pipeline (Aug 2022–Jul 2025). For methodology details, see [Methodology](methodology.md).
 
 ---
 
@@ -10,61 +8,50 @@ Full results from the v2 pipeline. For methodology details, see [Methodology](me
 
 **Question**: Do users who commented on a high-distress anchor post show a larger increase in mental health distress (Dec–May) compared to matched unexposed users?
 
-### NB06 — User-Level DiD (August pre-period, PSM-matched)
+### Combined Pooled DiD — Primary Result (NB07 §9)
 
-Panel: inner join of users with both August and Dec–May activity. ~155 matched pairs/cycle.
+Stacks all three subreddits and all three cycles; subreddit + cycle fixed effects; HC3 SEs.
 
-`mh_score ~ period + exposed + period×exposed + log1p_posts`, HC3 SEs:
+| ATT | 95% CI | p | n matched users | n obs |
+|-----|--------|---|---|---|
+| **+0.0045** | [+0.0007, +0.0083] | **0.021*** | 6,012 | 12,416 |
 
-| Specification | DiD | 95% CI | p-value | n |
-|--------------|-----|--------|---------|---|
-| Cycle 1 | +0.0069 | [−0.0120, +0.0258] | 0.476 n.s. | 562 |
-| Cycle 2 | +0.0102 | [−0.0063, +0.0268] | 0.226 n.s. | 562 |
-| Pooled + cycle FE | +0.0080 | [−0.0044, +0.0205] | 0.207 n.s. | 1,124 |
+This is the headline cross-community estimate. See `data/processed/combined_pooled_did.csv`.
 
-![ATT coefficient plot — NB06](../figures/fig_att_coef_v2.png)
+### Per-Subreddit Pooled DiD (NB06 + NB07, cycle FE)
 
-![Parallel trends — NB06 matched panel](../figures/fig_parallel_trends_v2.png)
+| Subreddit | ATT | 95% CI | p | Matched pairs |
+|-----------|-----|--------|---|---|
+| r/GradAdmissions | +0.0038 | [−0.0028, +0.0104] | 0.255 n.s. | 1,235 |
+| r/MSCS | +0.0065 | [−0.0051, +0.0181] | 0.270 n.s. | 240 |
+| r/MBA | **+0.0055** | [+0.0005, +0.0106] | **0.032*** | 1,889 |
 
-### NB06 — Post-Level DiD (22,355 observations, cluster SEs on author)
+Individual subreddits are underpowered; significance is achieved in MBA alone and in the combined pooled spec.
 
-`mh_score ~ period + exposed + period×exposed + log1p_posts [+ user FE]`:
+### MBA Cycle 2 — Multi-Spec Replication
 
-| Specification | DiD | p-value | n |
-|--------------|-----|---------|---|
-| Cycle 1, no FE | +0.0045 | 0.458 n.s. | 10,217 |
-| Cycle 1, +user FE | +0.0039 | 0.493 n.s. | 10,217 |
-| Cycle 2, no FE | −0.0059 | 0.384 n.s. | 12,138 |
-| Cycle 2, +user FE | −0.0030 | 0.597 n.s. | 12,138 |
-| Pooled, no FE | −0.0008 | 0.858 n.s. | 22,355 |
-| Pooled, +user FE | +0.0038 | 0.343 n.s. | 22,355 |
+MBA Cycle 2 is the strongest within-subreddit signal, replicating across every specification:
 
-### NB08 — User-Level DiD (Sep–Nov pre-period, 668 matched pairs)
+| Spec | ATT | 95% CI | p |
+|------|-----|--------|---|
+| Binary DiD | +0.0096 | [+0.0011, +0.0182] | 0.027* |
+| Intensity DiD | +0.0136 | [+0.0024, +0.0247] | 0.018* |
+| Exposure-Prob DiD | +0.0171 | [+0.0059, +0.0282] | 0.003** |
+| GPS-WLS | +0.0238 | [+0.0018, +0.0457] | 0.034* |
 
-Pre-period redefined to Sep–Nov activity before first anchor comment. Coverage: 36.5%.
+### Per-Dimension Results (Pooled, r/MBA)
 
-| Specification | DiD | p-value |
-|--------------|-----|---------|
-| Cycle 1 | +0.0058 | 0.365 n.s. |
-| Cycle 2 | +0.0090 | 0.104 n.s. |
-| Pooled | +0.0076 | 0.067 (borderline) |
+| Dimension | ATT | p |
+|-----------|-----|---|
+| Anxiety | +0.0073 | 0.007** |
+| Depression | +0.0068 | 0.029* |
+| Stress | +0.0057 | 0.055 (borderline) |
 
-![Parallel trends — NB08 Sep–Nov panel](../figures/fig_parallel_trends_alt.png)
+### NB08 — Alternative Pre-Period (Sep–Nov, all subreddits)
 
-### NB08 — Causal Impact (Bayesian Structural Time Series)
+Pre-period redefined to Sep–Nov activity before first anchor comment. Higher coverage than the August panel.
 
-Aggregated weekly exposed vs. unexposed mh_score, Sep–May window:
-
-| Cycle | Relative effect | Direction |
-|-------|----------------|-----------|
-| 1 | +2.1% | Positive |
-| 2 | +2.7% | Positive |
-
-![Causal Impact — Cycle 1](../figures/fig_causal_impact_cycle1.png)
-
-![Causal Impact — Cycle 2](../figures/fig_causal_impact_cycle2.png)
-
-Both methods show directionally consistent positive effects across both cycles.
+CausalImpact (Bayesian Structural Time Series) shows consistent positive relative effects across all subreddits and cycles.
 
 ---
 
@@ -72,7 +59,29 @@ Both methods show directionally consistent positive effects across both cycles.
 
 **Question**: Do users with broader cross-Reddit presence show a different distress response?
 
-Three-way interaction `period × exposed × community_breadth_log` in NB06 and NB08. Results are inconclusive in the current pipeline due to the same power constraints. The direction and significance of the moderation coefficient varies by specification and cycle. Further analysis requires higher-powered samples.
+Three-way interaction `period × exposed × community_breadth_log` in NB06. Clean null across all subreddits:
+
+| Subreddit | ATT (breadth mod, pooled) | p |
+|-----------|---------------------------|---|
+| r/GradAdmissions | −0.0017 | 0.629 n.s. |
+| r/MSCS | +0.0047 | 0.537 n.s. |
+| r/MBA | +0.0004 | 0.852 n.s. |
+
+Community breadth does not moderate the distress response to anchor exposure.
+
+---
+
+## Parallel Trends Assumption
+
+Formally tested via week_number × exposed regression in the pre-period (NB06 §4a). All subreddits, all cycles, and the pooled spec are n.s. — the assumption holds.
+
+| Subreddit | Pooled coef | p |
+|-----------|-------------|---|
+| r/GradAdmissions | +0.000684 | 0.204 n.s. |
+| r/MSCS | −0.000450 | 0.636 n.s. |
+| r/MBA | +0.000297 | 0.502 n.s. |
+
+See `fig_parallel_trends_pretest_{SUBREDDIT}.png` and `parallel_trends_test_v2.csv` per subreddit.
 
 ---
 
@@ -80,26 +89,18 @@ Three-way interaction `period × exposed × community_breadth_log` in NB06 and N
 
 | Figure | Description |
 |--------|-------------|
-| `fig_att_coef_v2.png` | ATT coefficient plot from NB06 DiD |
-| `fig_parallel_trends_v2.png` | Pre/post means by exposure — matched panel (NB06) |
-| `fig_parallel_trends_alt.png` | Pre/post means — Sep–Nov pre-period panel (NB08) |
-| `fig_causal_impact_cycle1.png` | Causal Impact output — Cycle 1 |
-| `fig_causal_impact_cycle2.png` | Causal Impact output — Cycle 2 |
-| `fig_event_study_v2.png` | Event study using SVM mh_score |
-| `fig_event_study_clean.png` | Clean event study with 95% CI (old pipeline) |
-| `fig_did_estimates.png` | DiD coefficient comparison (old pipeline: VADER vs SVM) |
-| `fig_significance.png` | mh_score by outcome label + seasonal pattern |
-| `fig_anchor_eda.png` | Anchor post breakdown by outcome label |
-| `fig_anchor_posts_per_week.png` | Anchor posts per week |
-| `fig_community_breadth_dist.png` | Community breadth distribution |
-| `fig_breadth_by_exposure.png` | Breadth: exposed vs unexposed |
-| `fig_classifier_scores.png` | Score distributions for all three classifiers |
-| `fig_score_correlation.png` | mh_score vs VADER correlation |
-| `fig_weekly_sentiment.png` | Weekly VADER sentiment + post volume |
-| `fig_monthly_distress.png` | Monthly mean distress + post volume |
+| `fig_att_coef_{SUBREDDIT}.png` | ATT coefficient plot per cycle + pooled (NB06) |
+| `fig_parallel_trends_{SUBREDDIT}.png` | Pre/post means by exposure — August pre-period matched panel (NB06) |
+| `fig_parallel_trends_pretest_{SUBREDDIT}.png` | Formal parallel trends pre-test: weekly mh_score trend (NB06 §4a) |
+| `fig_parallel_trends_alt_{SUBREDDIT}.png` | Pre/post means — Sep–Nov pre-period panel (NB08) |
+| `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | CausalImpact BSTS output per cycle (NB08) |
+| `fig_att_comparison.png` | Forest plot: ATT for all 3 subreddits side by side (NB07) |
+| `fig_mhscore_distributions.png` | Pre/post mh_score boxplots: all 3 subreddits (NB07) |
+| `fig_anchor_comparison.png` | Anchor post characteristics across subreddits (NB07) |
+| `fig_nli_validation_scores.png` | BART score distribution + SVM vs BART scatter (NB09) |
 
 ---
 
 ## Summary
 
-The signal is present and directionally consistent — exposure to high-distress anchor posts is associated with small positive increases in mh_score in all specifications. However, it does not reach p < 0.05 in the current v2 pipeline, most likely due to the August pre-period's very low user coverage (~155 matched pairs/cycle). The Sep–Nov alternative (NB08) recovers power and yields a borderline pooled result (p = 0.067), with independent confirmation from Causal Impact.
+Exposure to high-distress anchor posts is associated with a small but statistically significant increase in distress scores when pooling across all three communities and cycles (ATT = +0.0045, p = 0.021). The effect is directionally consistent across all subreddits and specifications. MBA is the only subreddit to reach significance individually (+0.0055, p = 0.032), driven especially by Cycle 2. GradAdmissions and MSCS estimates are positive but underpowered. Community breadth does not moderate the effect (RQ2 null).

@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png + combined_pooled_did.csv now generated)
+**Last updated**: 2026-04-23 (MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png + combined_pooled_did.csv now generated; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; old-pipeline figures removed)
 
 ---
 
@@ -78,8 +78,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 │       │   ├── posts_clean.jsonl         ← NOT in git — decompressed from data/mba/
 │       │   └── comments_clean.jsonl      ← NOT in git — decompressed from data/mba/
 │       ├── comparison_summary.parquet    ← NB07 output (all key metrics, 3 subreddits)
-│       ├── combined_pooled_did.csv       ← NB07 §9 output (headline pooled ATT across all 3 subreddits)
-│       └── nli_anchor_validation.parquet ← OBSOLETE — delete if present; BART fields now in anchor_posts.parquet
+│       └── combined_pooled_did.csv       ← NB07 §9 output (headline pooled ATT across all 3 subreddits)
 ├── models/                               ← clf_anxiety/depression/stress.joblib
 ├── figures/                              ← all PNG outputs
 └── docs/
@@ -218,7 +217,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 
 > Coverage is now 100%. Missing accounts or errors default to `community_breadth = 0` so that PSM in NB06 can utilize `community_breadth_log` without dropping rows.
 
-> `nli_anchor_validation.parquet` is now obsolete — BART fields are embedded directly in each subreddit's `anchor_posts.parquet`. Delete it if present.
+> BART fields (`bart_top_label`, `bart_top_score`, `bart_top_neg_label`, `bart_top_neg_score`, `bart_is_negative`) are embedded directly in each subreddit's `anchor_posts.parquet` (written by NB03).
 
 ---
 
@@ -337,19 +336,6 @@ def assign_window(author, dt, cycle):
 | `fig_pipeline_funnel.png` | NB05a | Waterfall: labeled → has activity → has pre → has post → in panel (exposed users) |
 | `fig_funnel_exposed_vs_unexposed.png` | NB05a | Side-by-side bar: dropout category rates for exposed vs unexposed |
 | `fig_sensitivity_pre_period.png` | NB06a | ATT + 95% CI across 3 pre-period length restrictions (full, ≥7d, ≥14d) |
-| `fig_event_study_v2.png` | old pipeline | Event study with SVM mh_score (±2 weeks) |
-| `fig_event_study_clean.png` | old pipeline | Event study with 95% CI (clean version) |
-| `fig_event_study.png` | old pipeline | Event study with VADER distress |
-| `fig_did_estimates.png` | old pipeline | VADER vs SVM DiD comparison + cross-cycle |
-| `fig_significance.png` | old pipeline | mh_score by outcome label + seasonal pattern |
-| `fig_anchor_eda.png` | old pipeline | Anchor post breakdown by label/VADER |
-| `fig_anchor_posts_per_week.png` | old pipeline | Anchor post volume per week |
-| `fig_community_breadth_dist.png` | old pipeline | Breadth distribution (raw + log) |
-| `fig_breadth_by_exposure.png` | old pipeline | Breadth: exposed vs unexposed |
-| `fig_classifier_scores.png` | old pipeline | Score distributions for 3 classifiers |
-| `fig_score_correlation.png` | old pipeline | mh_score vs VADER correlation |
-| `fig_weekly_sentiment.png` | old pipeline | Weekly VADER sentiment + post volume |
-| `fig_monthly_distress.png` | old pipeline | Monthly mean distress + volume |
 
 ---
 

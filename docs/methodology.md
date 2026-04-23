@@ -51,7 +51,7 @@ mh_score = β₀ + β₁·period + β₂·exposed + β₃·(period × exposed) +
 
 DiD's key assumption: absent treatment, the exposed and unexposed groups would have followed the same distress trajectory.
 
-Verified with the parallel trends plot (`fig_parallel_trends_v2.png` for NB06, `fig_parallel_trends_alt.png` for NB08) — pre-period means should be close across groups.
+Verified with the parallel trends plots (`fig_parallel_trends_{SUBREDDIT}.png` for NB06, `fig_parallel_trends_alt_{SUBREDDIT}.png` for NB08) and a formal pre-trend regression (`fig_parallel_trends_pretest_{SUBREDDIT}.png`) — the week_number × exposed interaction is n.s. across all subreddits and cycles.
 
 ---
 
