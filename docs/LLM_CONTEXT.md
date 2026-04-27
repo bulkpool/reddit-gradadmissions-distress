@@ -2,7 +2,7 @@
 
 **Purpose**: Dense, authoritative snapshot for AI assistants. Read this file before touching anything else in the repo. After making any changes, update the relevant sections here so future sessions start fresh.
 
-**Last updated**: 2026-04-23 (NB06 parallel-trends x-axis label corrected to `Pre (Aug)`; NB08 CausalImpact figures fixed to save via `ci.plot(fname=...)`; NB08 alt parallel-trends plot now iterates dynamically over all panel cycles including cycle 3; MBA NB06 OOM crash fixed; formal parallel trends test added to NB06 §4a; combined pooled DiD across all 3 subreddits added to NB07 §9; nli_anchor_validation.parquet deleted — BART fields live in anchor_posts.parquet; all old-pipeline and no-suffix stale figures removed; fig_nli_kappa_confusion removed from table — NB09 no longer has that cell; diagnostic figures from NB04a/NB05a/NB06a regenerated and committed)
+**Last updated**: 2026-04-26 (NB06 pooled DiD cycle FE fix: run_did() and run_did_dim() now include C(cycle_str) when pooling across cycles; did_summary.csv regenerated for all 3 subreddits; estimates stable, MBA pooled binary +0.0065* p=0.019)
 
 ---
 
@@ -18,7 +18,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 - Per cycle (subreddit FE): Cycle 1 +0.0042 p=0.255 n.s., Cycle 2 +0.0047 p=0.141 n.s., Cycle 3 +0.0044 p=0.171 n.s.
 - Per dimension (all pooled): Anxiety +0.0045 p=0.023*, Depression +0.0045 p=0.041*, Stress +0.0045 p=0.030*
 - **Formal parallel trends test (NB06 §4a)**: week_number × exposed interaction is n.s. across all subreddits, cycles, and pooled spec — parallel trends assumption confirmed.
-- Per-subreddit NB06 pooled results: GA +0.0037 p=0.27 (n.s.), MSCS +0.0065 p=0.27 (n.s.), MBA +0.0066 p=0.017* (significant)
+- Per-subreddit NB06 pooled results (with cycle FE): GA +0.0041 p=0.235 n.s., MSCS -0.0073 p=0.256 n.s., MBA +0.0065 p=0.019* (significant)
 
 ---
 
