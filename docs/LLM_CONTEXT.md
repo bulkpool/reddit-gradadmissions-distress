@@ -169,7 +169,7 @@ Causal inference study on **r/GradAdmissions, r/MSCS, and r/MBA**. All three sub
 | `post_str_score` | float64 | [0.150, 0.657] |
 | `post_n_posts` | int64 | [1, 1453] |
 
-> Only 1,368 of 20,932 panel users are active in August (~6.5%) — the primary power bottleneck.
+> Pre-period is Sep–Nov-before-first-anchor-comment (since NB04 switch on 2026-04-13, commit `17db224`). The earlier August-only pre-period covered only ~6.5 % of panel users; the current Sep–Nov pre-period covers ~36 %.
 
 **`panel_scores_alt.parquet`** — 7,868 rows, 7,644 unique authors (Sep–Nov pre-period, NB08)
 | Column | Type | Notes |
@@ -322,7 +322,7 @@ def assign_window(author, dt, cycle):
 | Figure | Produced by | Description |
 |--------|-------------|-------------|
 | `fig_att_coef_{SUBREDDIT}.png` | NB06 | ATT coefficient plot (user-level DiD per cycle + pooled) |
-| `fig_parallel_trends_{SUBREDDIT}.png` | NB06 | Pre/post mean mh_score — August pre-period matched panel |
+| `fig_parallel_trends_{SUBREDDIT}.png` | NB06 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
 | `fig_parallel_trends_alt_{SUBREDDIT}.png` | NB08 | Pre/post mean mh_score — Sep–Nov pre-period matched panel |
 | `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | NB08 | CausalImpact BSTS output — one per cycle present in the panel |
 | `fig_nli_validation_scores.png` | NB09 | Histogram of BART top-negative-label scores + SVM vs BART scatter (all anchor posts) |
@@ -440,7 +440,7 @@ Use these with the `NotebookEdit` tool (`cell_id` parameter) to target specific 
 | `d3000004` | load panel + merge breadth |
 | `f3000006` | CALIPER, MATCH_FEATURES, psm_match() def |
 | `h3000008` | PSM per cycle → long_rows |
-| `j3000010` | pre-period balance check + visual parallel trends (August pre-period; x-axis label is `Pre (Aug)`) |
+| `j3000010` | pre-period balance check + visual parallel trends (Sep–Nov pre-period; x-axis label is `Pre`) |
 | `62ccb4a5` | §4a markdown header (formal parallel trends test) |
 | `7d7c7285` | §4a formal pre-trend test: loads post_level_scores.parquet, regresses mh_score ~ week_number × exposed (pre-period only, matched users); saves parallel_trends_test_v2.csv + fig_parallel_trends_pretest_{SUBREDDIT}.png |
 | `l3000012` | run_did() def + RQ1 user-level DiD |

@@ -10,12 +10,13 @@ This document covers the key design concepts, terminology, and limitations of th
 
 A Reddit post identified as a **high-distress negative disclosure** related to graduate admissions. These are the treatment events.
 
-A post qualifies as an anchor if it meets all three criteria:
+A post qualifies as an anchor if it meets both criteria:
 1. Falls within the anchor period: Sep 1–Nov 30 of the cycle year
-2. Matches a negative keyword list (reject, decline, waitlist, anxiety, depressed, stress, falling apart…)
-3. `mh_score > 0.45` from the three SVM classifiers
+2. Matches a negative-admissions keyword (reject, decline, waitlist, anxiety, depressed, stress, falling apart, gave up, imposter, …) **and** zero-shot NLI via `facebook/bart-large-mnli` classifies it as one of three negative labels (`negative admissions outcome` / `rejection or funding loss` / `giving up on graduate school`) rather than `general admissions discussion` (`bart_is_negative == True`).
 
-**Result**: varies by cycle; see `data/processed/anchor_posts.parquet`.
+> Anchor selection used to threshold on `mh_score > 0.45` from the SVM classifiers. That was replaced with the keyword + BART NLI rule on 2026-04-23 to break the circularity between the SVM-defined treatment and the SVM-measured outcome — see commit `6b55593`. SVM scores are still stored in `anchor_posts.parquet` for descriptive use but are no longer used for selection.
+
+**Result**: 2,010 anchors in r/GradAdmissions, 144 in r/MSCS, 885 in r/MBA across all three cycles; see `data/processed/{sub}/anchor_posts.parquet`.
 
 ---
 
@@ -24,7 +25,7 @@ A post qualifies as an anchor if it meets all three criteria:
 Whether a user was **treated** in a given cycle.
 
 - **Exposed**: user commented on an anchor post thread, identified via `link_id` in the raw JSONL matching the anchor post's `id`. Anchor post *authors* are excluded.
-- **Unexposed**: active in r/GradAdmissions during the full Aug 1–May 31 window of that cycle but never commented on any anchor thread.
+- **Unexposed**: active in the same subreddit during the full Aug 1–May 31 window of that cycle but never commented on any anchor thread.
 
 Exposure is identified at thread level using `link_id` (raw comments field: `link_id = "t3_<post_id>"`). The cleaned files carry this as `post_id` after stripping the `t3_` prefix.
 
@@ -66,8 +67,9 @@ Because exposed users (those who engaged with distressed content) may differ fro
 4. Check balance via Standardised Mean Differences (SMD < 0.1 target)
 5. Only matched pairs enter the DiD regression
 
-**NB06 result**: ~155 matched pairs/cycle (August pre-period → sparse; low power).
-**NB08 result**: ~668 matched pairs/cycle (Sep–Nov pre-period → 4× improvement).
+**NB06 result** (Sep–Nov pre-period): per-subreddit matched pairs are 1,235 (GA), 240 (MSCS), and 1,889 (MBA) pooled across all three cycles. See `did_summary.csv` per subreddit.
+
+**NB08 result**: independent re-implementation on re-scored raw text; PSM uses the same Sep–Nov-before-first-anchor strategy with a slightly different matcher (no scaler, ball-tree NN). Used as a robustness check rather than as a "more powerful" alternative — NB04 already adopted the Sep–Nov pre-period (commit `17db224`, 2026-04-13).
 
 ---
 
@@ -87,7 +89,7 @@ mh_score = mean(sigmoid(anx_df), sigmoid(dep_df), sigmoid(str_df))
 
 ### Community Breadth
 
-Number of distinct subreddits a user posted or commented in during the study window (Aug 2023–Jul 2025), excluding r/GradAdmissions and their own profile sub. Log-transformed (`log1p(breadth)`) in regression models.
+Number of distinct subreddits a user posted or commented in during the study window (Aug 2022–Jul 2025), excluding the focal admissions subreddit and the user's own profile sub. Log-transformed (`log1p(breadth)`) in regression models. Failed Arctic Shift fetches and deleted accounts are imputed to `breadth = 0`, giving 100 % coverage across panel users.
 
 **Theoretical role (RQ2)**: proxy for social network diversity. The stress-buffering hypothesis predicts higher breadth → smaller distress response. Results in the current pipeline are inconclusive due to sample size constraints.
 
@@ -95,9 +97,7 @@ Number of distinct subreddits a user posted or commented in during the study win
 
 ### Pre-Period Definition
 
-**NB06 (primary)**: Pre = August of the cycle year. Clean baseline before application season, but very sparse — only ~6.5% of panel users are active in August.
-
-**NB08 (alternative)**: Pre = Sep–Nov activity *before* each user's first anchor comment. Uses the anchor period itself as baseline, filtering to activity before treatment onset. Raises coverage to ~36.5% and increases matched pairs from ~155 to ~668 per cycle.
+Both NB06 and NB08 use the same window definition (since `17db224`, 2026-04-13): **Pre = Sep–Nov activity *before* each user's first anchor comment** (or full Sep–Nov for unexposed users). This filters baseline activity to before treatment onset and provides ~36 % panel coverage — a substantial improvement over the August-only design used in earlier drafts. NB06 reads aggregated user-level scores from `panel_scores.parquet`; NB08 re-scores raw text inline (so the two pipelines share a definition but not an implementation).
 
 ---
 
@@ -139,19 +139,19 @@ Standard OLS assumes homoskedasticity. Social media data violates this — users
 
 ## Limitations
 
-1. **Low power in NB06**: August pre-period covers only ~6.5% of panel users (~155 matched pairs/cycle), severely limiting statistical power. NB08 addresses this by redefining the pre-period.
+1. **Per-subreddit power**: Individual subreddits — especially r/MSCS with 240 matched pairs pooled across three cycles — are underpowered to detect the small effect on their own. Significance is achieved in the cross-community pooled spec (NB07 §9) and in r/MBA alone (p = 0.032).
 
-2. **Null results**: The current v2 pipeline does not find statistically significant effects at conventional thresholds (p < 0.05) in NB06. NB08 yields borderline significance (p = 0.067 pooled). Effects are directionally consistent and in the expected direction across all specifications.
+2. **Effect size is small**: pooled ATT of +0.0045 corresponds to ~6–7 % of one population SD of `mh_score`. Directionally consistent across all 3 subreddits, all 3 cycles, and all 3 distress dimensions (anx / dep / stress) — argues against single-cycle or single-emotion artefact.
 
 3. **Exposure proxy**: "Exposed" means *commented on* an anchor thread, not merely *read* it. Many truly exposed users (who read but didn't comment) are classified as unexposed, attenuating the estimated effect.
 
-4. **PSM on observables only**: Matching controls for pre-period distress and activity, but unobserved differences (personality, resilience, offline support networks) remain as potential confounders.
+4. **PSM on observables only**: Matching controls for pre-period distress, posting activity, and (where ≥ 95 % coverage) log-community-breadth, but unobserved differences (personality, resilience, offline support networks) remain as potential confounders.
 
-5. **Text-based distress proxy**: mh_score measures how someone writes, not their psychological state directly. Users may be distressed without writing distressed posts, or write distressed-sounding posts strategically.
+5. **Text-based distress proxy**: `mh_score` measures how someone writes, not their psychological state directly. Users may be distressed without writing distressed posts, or write distressed-sounding posts strategically.
 
-6. **Community breadth as social support proxy**: counting distinct subreddits is crude — belonging to r/gaming and r/cooking does not provide admissions-relevant social support.
+6. **Community breadth as social support proxy**: counting distinct subreddits is crude — belonging to r/gaming and r/cooking does not provide admissions-relevant social support. The RQ2 null may reflect proxy invalidity rather than absent moderation.
 
-7. **Reddit-specific generalizability**: r/GradAdmissions is a self-selected community of applicants willing to post publicly.
+7. **Reddit-specific generalizability**: r/GradAdmissions, r/MSCS, and r/MBA are each self-selected communities of applicants willing to post publicly.
 
 ---
 

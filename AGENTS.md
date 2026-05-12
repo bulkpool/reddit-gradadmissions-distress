@@ -37,7 +37,7 @@ To run a single notebook manually (e.g. for debugging):
 ~/venvs/jupyter/bin/jupyter nbconvert --to notebook --execute \
   --output /tmp/out.ipynb \
   --ExecutePreprocessor.timeout=7200 \
-  notebooks/06_did_analysis_v2.ipynb
+  notebooks/06_did_analysis.ipynb
 ```
 
 ---
@@ -53,17 +53,17 @@ To run a single notebook manually (e.g. for debugging):
 
 ## Data Layout
 
-All pipeline outputs go to `data/processed_v2/{SUBREDDIT}/`. The three supported subreddits are:
+All pipeline outputs go to `data/processed/{SUBREDDIT}/`. The three supported subreddits are:
 
 | Subreddit | Raw data location | NB01 needed? |
 |-----------|------------------|--------------|
 | `gradadmissions` | `r_gradadmissions_posts.jsonl` (repo root) + `data/raw/r_gradadmissions_2022_posts.jsonl` | Yes |
 | `mscs` | `data/raw/r_MSCS_posts.jsonl` + `data/raw/r_MSCS_2022_posts.jsonl` | Yes |
-| `mba` | `data/mba/posts_clean.jsonl.gz` (pre-cleaned, already includes 2022) | **No** — decompress `.gz` to `data/processed_v2/mba/` |
+| `mba` | `data/mba/posts_clean.jsonl.gz` (pre-cleaned, already includes 2022) | **No** — decompress `.gz` to `data/processed/mba/` |
 
 All three subreddits cover **Aug 2022–Jul 2025 (three admission cycles)**. Cycle numbering is chronological: `cycle=1` → 2022 cycle, `cycle=2` → 2023 cycle, `cycle=3` → 2024 cycle. NB01 concatenates the 2022 and main raw files per subreddit. Downstream notebooks derive the cycle list from the data — do not hardcode `[1, 2]` or `[1, 2, 3]`; iterate over `sorted(panel['cycle'].unique())` instead.
 
-`data/processed_v2/mba/posts_clean.jsonl` and `comments_clean.jsonl` are **not in git** — decompress from `data/mba/*.jsonl.gz` before running the MBA pipeline from NB03.
+`data/processed/mba/posts_clean.jsonl` and `comments_clean.jsonl` are **not in git** — decompress from `data/mba/*.jsonl.gz` before running the MBA pipeline from NB03.
 
 ---
 
@@ -72,8 +72,8 @@ All three subreddits cover **Aug 2022–Jul 2025 (three admission cycles)**. Cyc
 - **Cleaned JSONL fields**: `id`, `author`, `created_dt` (ISO string), `clean_text`, `post_id` (comments), `score`
 - **Raw JSONL fields**: `id`, `author`, `created_utc` (Unix int), `selftext`/`body`, `link_id` (`"t3_<post_id>"`)
 - NB03, NB04, and NB08 all read from **cleaned** files. Do not reintroduce raw field names (`created_utc`, `body`, `link_id`).
-- `panel_scores_v2.parquet` has `pre_mh_score`/`post_mh_score` columns. `post_level_scores_v2.parquet` has `mean_mh_score` (not `mh_score`). NB06 renames to `mh_score` at runtime in long format.
-- `panel_scores_v2.parquet` does **not** contain `exposure_prob` — NB06 falls back to 0.0 via `.get()`. GPS weighting is therefore a no-op in current data.
+- `panel_scores.parquet` has `pre_mh_score`/`post_mh_score` columns. `post_level_scores.parquet` has `mean_mh_score` (not `mh_score`). NB06 renames to `mh_score` at runtime in long format.
+- `panel_scores.parquet` contains `exposure_intensity` (float, BART top-neg score) but NOT `exposure_prob` — NB06 reads `exposure_prob` separately from `exposure_labels.parquet`. GPS weights are nearly degenerate (mean ≈ 1.0) in current data.
 
 ---
 
@@ -86,7 +86,7 @@ All three subreddits cover **Aug 2022–Jul 2025 (three admission cycles)**. Cyc
 | `FileNotFoundError` in NB06 | `os.chdir()` was present, making `Path('..').resolve()` go above project root | Do not add `os.chdir()` to NB06 |
 | NB06 kernel dies instantly (7s) | OOM — Linux OOM killer fires when swap is full | Close browser tabs, retry |
 | `ArrowInvalid: Could not convert 'pooled'` | Mixed int/str in `cycle` column when saving parquet | `df['cycle'] = df['cycle'].astype(str)` before `to_parquet()` |
-| NB05 timeout after 2h | Reddit API breadth fetch for large subreddit | Re-run — checkpoint resumes automatically from `breadth_checkpoint_v2.jsonl` |
+| NB05 timeout after 2h | Reddit API breadth fetch for large subreddit | Re-run — checkpoint resumes automatically from `breadth_checkpoint.jsonl` |
 | SUBREDDIT injection silently fails | Config cell uses double-space `SUBREDDIT  =` | `inject_subreddit()` uses `r"SUBREDDIT\s*=\s*'"` regex — verify it matches |
 
 ---
@@ -99,7 +99,7 @@ All three subreddits cover **Aug 2022–Jul 2025 (three admission cycles)**. Cyc
 - Do not commit `posts_clean.jsonl`, `comments_clean.jsonl`, or `pipeline_logs/` — they are in `.gitignore`.
 - Do not commit `_run_*.ipynb` temp notebooks — also gitignored.
 - Do not run notebooks with system Python — only `~/venvs/jupyter/bin/`.
-- Do not create new intermediate output files outside `data/processed_v2/{SUBREDDIT}/`.
+- Do not create new intermediate output files outside `data/processed/{SUBREDDIT}/`.
 - Do not hardcode cycle lists (`for cycle in [1, 2]` etc.) in any notebook — derive from the loaded data.
 
 ---
@@ -108,7 +108,7 @@ All three subreddits cover **Aug 2022–Jul 2025 (three admission cycles)**. Cyc
 
 - Commit parquets and figures when the pipeline produces new results.
 - Update `docs/LLM_CONTEXT.md` after any schema change, new notebook, or new subreddit.
-- Typical commit scope: `data/processed_v2/`, `figures/`, `notebooks/`, `docs/LLM_CONTEXT.md`.
+- Typical commit scope: `data/processed/`, `figures/`, `notebooks/`, `docs/LLM_CONTEXT.md`.
 - Do not force-push. Do not amend published commits.
 
 ---

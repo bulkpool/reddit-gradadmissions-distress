@@ -1,6 +1,8 @@
 # Quickstart — Reproducing the Project
 
-This guide walks you through setting up the environment and running the full pipeline from scratch.
+This guide walks you through setting up the environment and running the pipeline for one or all three subreddits.
+
+For a per-notebook description, see [Pipeline](pipeline.md). For the result tables, see [Results](results.md).
 
 ---
 
@@ -8,156 +10,142 @@ This guide walks you through setting up the environment and running the full pip
 
 ### Python Environment
 
-All notebooks use a Jupyter Python environment. The project uses a venv at `~/venvs/jupyter/`. Install required packages:
+The project uses a Jupyter venv at `~/venvs/jupyter/`. Always use the venv binaries — never system Python.
 
 ```bash
 ~/venvs/jupyter/bin/pip install \
-    vaderSentiment scikit-learn statsmodels joblib \
-    pandas numpy matplotlib requests causalimpact
+    scikit-learn statsmodels joblib \
+    pandas numpy matplotlib requests \
+    causalimpact==0.2.6 \
+    torch transformers
 ```
 
-> `causalimpact 0.2.6` has a pandas 2.x incompatibility; NB08 patches it at runtime automatically.
+Requirements:
+- `causalimpact 0.2.6` is incompatible with pandas 2.x — NB08 patches `pandas.core.dtypes.common.is_datetime_or_timedelta_dtype` at runtime.
+- `torch` + `transformers` are needed by NB03 for `facebook/bart-large-mnli` zero-shot inference.
 
 ### Raw Data
 
-Raw Reddit data lives at the **repository root** (not in `data/`). Place these files there:
+| Subreddit | Files | Location | In git? |
+|-----------|-------|----------|---------|
+| r/GradAdmissions | `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (Aug 2023 onwards) | repo root | ❌ |
+| r/GradAdmissions | `r_gradadmissions_2022_posts.jsonl`, `r_gradadmissions_2022_comments.jsonl` (Aug 2022 cycle) | `data/raw/` | ❌ |
+| r/MSCS | `r_MSCS_posts.jsonl`, `r_MSCS_comments.jsonl`, `r_MSCS_2022_posts.jsonl`, `r_MSCS_2022_comments.jsonl` | `data/raw/` | ❌ |
+| r/MBA | `posts_clean.jsonl.gz`, `comments_clean.jsonl.gz` (pre-cleaned, includes 2022) | `data/mba/` | ✅ |
 
-```
-r_gradadmissions_posts.jsonl          # Raw posts
-r_gradadmissions_comments.jsonl       # Raw comments
-r_gradadmissions_posts.cleaned.jsonl  # Pre-cleaned posts (used by old NB07 baseline)
-r_gradadmissions_comments.cleaned.jsonl
+For r/MBA, decompress the gzipped files into `data/processed/mba/` once before running anything past NB01:
+
+```bash
+mkdir -p data/processed/mba
+gunzip -c data/mba/posts_clean.jsonl.gz    > data/processed/mba/posts_clean.jsonl
+gunzip -c data/mba/comments_clean.jsonl.gz > data/processed/mba/comments_clean.jsonl
 ```
 
 ---
 
 ## What's Already in the Repo
 
-Several expensive steps are pre-computed and included:
+The repo ships with all pipeline outputs and figures pre-computed — you can read [Results](results.md) without running anything.
 
-| Already included | Skips |
-|-----------------|-------|
-| `models/clf_anxiety.joblib` etc. | SVM classifier training (~15 min API + training) |
-| `data/processed/panel_scores.parquet` | Pre/post scoring pass |
-| `data/processed/panel_scores_alt.parquet` | NB08 Sep–Nov panel |
-| `data/processed/post_level_scores.parquet` | Post-level DiD dataset |
-| `data/processed/dose_exposure.parquet` | Dose-response dataset |
-| `data/processed/exposure_labels.parquet` | Exposure classification |
-| `data/processed/anchor_posts.parquet` | Anchor post list |
-| `data/processed/user_community_breadth.parquet` | Breadth (~3 hr API run) |
-| `data/processed/breadth_checkpoint.jsonl` | API checkpoint (resumable) |
+| Pre-computed | Skips |
+|--------------|-------|
+| `models/clf_*.joblib` | SVM classifier training (Arctic Shift API + ~15 min training) |
+| `data/processed/{sub}/anchor_posts.parquet` | NB03 keyword + BART NLI pass |
+| `data/processed/{sub}/exposure_labels.parquet` | NB03 exposure classification |
+| `data/processed/{sub}/panel_scores.parquet` | NB04 panel scoring |
+| `data/processed/{sub}/panel_scores_alt.parquet` | NB08 re-scored alt panel |
+| `data/processed/{sub}/post_level_scores.parquet` | NB04 post-level dataset |
+| `data/processed/{sub}/dose_exposure.parquet` | NB04 dose-response dataset |
+| `data/processed/{sub}/user_community_breadth.parquet` | NB05 Arctic Shift breadth (~3 h API run per subreddit) |
+| `data/processed/{sub}/breadth_checkpoint.jsonl` | NB05 resumable checkpoint |
+| `data/processed/{sub}/did_summary.csv` | NB06 result tables |
+| `data/processed/{sub}/parallel_trends_test_v2.csv` | NB06 §4a formal pre-trend test |
+| `data/processed/comparison_summary.parquet` | NB07 cross-subreddit summary |
+| `data/processed/combined_pooled_did.csv` | NB07 §9 headline pooled DiD |
 | `figures/*.png` | All output figures |
 
 ---
 
-## Execution Order
+## Running the Pipeline
 
+Use `run_pipeline.py` — it injects the correct `SUBREDDIT` value into each notebook's config cell at runtime and executes via `nbconvert`. Source notebooks are never modified.
+
+```bash
+# Full pipeline for all three subreddits + comparison + anchor characterisation
+~/venvs/jupyter/bin/python3 run_pipeline.py
+
+# Single subreddit
+~/venvs/jupyter/bin/python3 run_pipeline.py --subreddits gradadmissions
+~/venvs/jupyter/bin/python3 run_pipeline.py --subreddits mscs
+~/venvs/jupyter/bin/python3 run_pipeline.py --subreddits mba
+
+# Resume from a step (skip notebooks whose 2-digit prefix < NN)
+~/venvs/jupyter/bin/python3 run_pipeline.py --start-from 04
+
+# Skip NB07 cross-subreddit comparison
+~/venvs/jupyter/bin/python3 run_pipeline.py --skip-comparison
+
+# Skip NB09 anchor characterisation
+~/venvs/jupyter/bin/python3 run_pipeline.py --skip-validation
 ```
-01 → 02 → 03 → 04 → 05 → 06    (main pipeline)
-                          └→ 08  (alternative analysis)
-00  (EDA, standalone)
-07  (optional VADER baseline)
+
+Each subreddit runs `NB01 → NB03 → NB04 → NB05 → NB06 → NB08` in sequence, with NB01 skipped for MBA (`PRE_CLEANED = {'mba'}`). After all three subreddits complete, NB07 and NB09 run once across all of them.
+
+Logs land in `pipeline_logs/{timestamp}_{slug}.log`.
+
+---
+
+## Step-by-Step (per subreddit)
+
+| Step | Notebook | Approx runtime | Notes |
+|------|----------|---------------|-------|
+| 1 | `01_clean_corpus.ipynb` | ~5 min | Reads raw JSONL, normalises text, derives `post_id` from `link_id`. Skipped for MBA. |
+| 2 | `02_train_classifiers.ipynb` | ~15 min | One-off — do not re-run. Models are in git. |
+| 3 | `03_exposure_labels.ipynb` | ~5–30 min | BART NLI inference dominates; faster with GPU. |
+| 4 | `04_panel_scores.ipynb` | ~10 min | Re-scores all panel-user text. |
+| 5 | `05_collect_community_breadth.ipynb` | ~1–3 h | Arctic Shift API; checkpointed. Skip if `user_community_breadth.parquet` exists. |
+| 6 | `06_did_analysis.ipynb` | ~2 min | Main per-subreddit results. |
+| 7 | `08_alt_analysis.ipynb` | ~15 min | Re-scores raw text + runs CausalImpact BSTS. |
+
+After all three subreddits:
+
+| Step | Notebook | Approx runtime | Notes |
+|------|----------|---------------|-------|
+| 8 | `07_comparison_analysis.ipynb` | ~3 min | Cross-subreddit comparison + combined pooled DiD (§9). |
+| 9 | `09_nli_anchor_validation.ipynb` | <1 min | Reads existing BART fields; no inference. |
+
+---
+
+## Running a Single Notebook Manually
+
+`run_pipeline.py` is the supported path. If you really need to invoke a notebook by hand (e.g. for debugging), you must inject the `SUBREDDIT` value yourself or edit the config cell:
+
+```bash
+~/venvs/jupyter/bin/jupyter nbconvert --to notebook --execute \
+  --ExecutePreprocessor.timeout=7200 \
+  --output /tmp/out.ipynb \
+  notebooks/06_did_analysis.ipynb
 ```
 
-| Step | Notebook | Runtime | Notes |
-|------|----------|---------|-------|
-| 1 | `01_clean_corpus.ipynb` | ~5 min | Reads raw JSONL from repo root |
-| 2 | `02_train_classifiers.ipynb` | ~15 min | Skip if `models/clf_*.joblib` exist |
-| 3 | `03_exposure_labels.ipynb` | ~3 min | — |
-| 4 | `04_panel_scores.ipynb` | ~10 min | — |
-| 5 | `05_collect_community_breadth.ipynb` | ~3 hr | Skip — already done, see above |
-| 6 | `06_did_analysis.ipynb` | ~2 min | Main results |
-| 7 | `08_alt_analysis.ipynb` | ~15 min | Reads raw JSONL; needs causalimpact |
-
----
-
-## Step-by-step
-
-### Step 1 — Clean the Corpus (`01_clean_corpus.ipynb`)
-
-Applies text normalization, deduplication, bot filtering, and adds `post_id` mapping to comments (derived from `link_id`). All downstream notebooks depend on this.
-
-**Reads**: `r_gradadmissions_posts.jsonl`, `r_gradadmissions_comments.jsonl` (repo root)
-
-**Writes**: `data/processed/posts_clean.jsonl`, `data/processed/comments_clean.jsonl`
-
----
-
-### Step 2 — Train SVM Classifiers (`02_train_classifiers.ipynb`)
-
-Trains three binary SVMs (anxiety, depression, stress) via Arctic Shift API pulls from mental health subreddits.
-
-> **Shortcut**: Skip this step — `models/clf_*.joblib` are already in the repo.
-
-**Writes**: `models/clf_anxiety.joblib`, `clf_depression.joblib`, `clf_stress.joblib`
-
----
-
-### Step 3 — Exposure Labels (`03_exposure_labels.ipynb`)
-
-Identifies anchor posts and classifies all panel users as exposed (commented on anchor thread via `link_id`) or unexposed.
-
-> **Shortcut**: Skip — `data/processed/exposure_labels.parquet` and `anchor_posts.parquet` are included.
-
----
-
-### Step 4 — Panel Scoring (`04_panel_scores.ipynb`)
-
-Scores every panel user's August (pre) and Dec–May (post) text. Also produces post-level scores and dose-exposure data.
-
-> **Shortcut**: Skip — all three output parquets are included.
-
----
-
-### Step 5 — Community Breadth (`05_collect_community_breadth.ipynb`) — *skip*
-
-> **Skip this step** — `data/processed/user_community_breadth.parquet` is included.
-
-Makes ~21k Arctic Shift API requests. Checkpoint in `data/processed/breadth_checkpoint.jsonl` — safe to resume if re-running.
-
----
-
-### Step 6 — Main DiD Analysis (`06_did_analysis.ipynb`)
-
-Runs PSM, user-level DiD (RQ1 + RQ2), post-level DiD, and dose-response analysis.
-
-**Reads**: `data/processed/panel_scores.parquet`, `user_community_breadth.parquet`
-
-**Writes**: figures to `figures/`
-
-**Runtime**: ~2 min
-
----
-
-### Step 7 — Alternative Analysis (`08_alt_analysis.ipynb`)
-
-Redefines the pre-period to Sep–Nov (4× more matched pairs) and runs Causal Impact.
-
-**Reads**: raw JSONL from repo root, `exposure_labels.parquet`, `anchor_posts.parquet`, `user_community_breadth.parquet`, `models/clf_*.joblib`
-
-**Writes**: `data/processed/panel_scores_alt.parquet`, `figures/fig_causal_impact_*.png`, `figures/fig_parallel_trends_alt.png`
-
-**Runtime**: ~15 min (rescores all raw text)
+The config cell sentinel is the `# change to` comment on the `SUBREDDIT = '...'` line — `run_pipeline.py`'s `inject_subreddit()` uses this to find the right line. Don't remove the sentinel.
 
 ---
 
 ## File Reference
 
-| File | In Repo | How to Get It |
-|------|---------|---------------|
-| `r_gradadmissions_posts.jsonl` | No | Obtain from data source |
-| `r_gradadmissions_comments.jsonl` | No | Obtain from data source |
-| `data/processed/posts_clean.jsonl` | No | Run NB01 |
-| `data/processed/comments_clean.jsonl` | No | Run NB01 |
-| `data/processed/panel_scores.parquet` | Yes | — |
-| `data/processed/panel_scores_alt.parquet` | Yes | — |
-| `data/processed/post_level_scores.parquet` | Yes | — |
-| `data/processed/dose_exposure.parquet` | Yes | — |
-| `data/processed/exposure_labels.parquet` | Yes | — |
-| `data/processed/anchor_posts.parquet` | Yes | — |
-| `data/processed/user_community_breadth.parquet` | Yes | — |
-| `data/processed/breadth_checkpoint.jsonl` | Yes | — |
-| `models/clf_anxiety.joblib` | Yes | — |
-| `models/clf_depression.joblib` | Yes | — |
-| `models/clf_stress.joblib` | Yes | — |
-| `figures/fig_*.png` | Yes | — |
+| File | Tracked in git | How to regenerate |
+|------|---------------|---|
+| `r_gradadmissions_posts.jsonl` (repo root) | ❌ | Obtain from data source |
+| `r_gradadmissions_comments.jsonl` (repo root) | ❌ | Obtain from data source |
+| `data/raw/r_gradadmissions_2022_*.jsonl` | ❌ | Obtain from data source |
+| `data/raw/r_MSCS_*.jsonl` | ❌ | Obtain from data source |
+| `data/mba/*.jsonl.gz` | ✅ | — |
+| `data/processed/{sub}/posts_clean.jsonl` | ❌ | Run NB01 (or decompress MBA `.gz`) |
+| `data/processed/{sub}/comments_clean.jsonl` | ❌ | Run NB01 (or decompress MBA `.gz`) |
+| `data/processed/{sub}/*.parquet` | ✅ | Run the relevant notebook |
+| `data/processed/{sub}/did_summary.csv` | ✅ | Run NB06 |
+| `data/processed/{sub}/parallel_trends_test_v2.csv` | ✅ | Run NB06 §4a |
+| `data/processed/combined_pooled_did.csv` | ✅ | Run NB07 (requires all 3 subs' NB06 outputs) |
+| `data/processed/comparison_summary.parquet` | ✅ | Run NB07 |
+| `models/clf_*.joblib` | ✅ | Run NB02 (don't, unless you must) |
+| `figures/*.png` | ✅ | Run the notebook that produces them |

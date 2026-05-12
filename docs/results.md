@@ -90,7 +90,7 @@ See `fig_parallel_trends_pretest_{SUBREDDIT}.png` and `parallel_trends_test_v2.c
 | Figure | Description |
 |--------|-------------|
 | `fig_att_coef_{SUBREDDIT}.png` | ATT coefficient plot per cycle + pooled (NB06) |
-| `fig_parallel_trends_{SUBREDDIT}.png` | Pre/post means by exposure — August pre-period matched panel (NB06) |
+| `fig_parallel_trends_{SUBREDDIT}.png` | Pre/post means by exposure — matched panel (NB06; Sep–Nov pre-period) |
 | `fig_parallel_trends_pretest_{SUBREDDIT}.png` | Formal parallel trends pre-test: weekly mh_score trend (NB06 §4a) |
 | `fig_parallel_trends_alt_{SUBREDDIT}.png` | Pre/post means — Sep–Nov pre-period panel (NB08) |
 | `fig_causal_impact_cycle{1,2,3}_{SUBREDDIT}.png` | CausalImpact BSTS output per cycle (NB08) |
